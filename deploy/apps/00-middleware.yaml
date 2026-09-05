@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: apps
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: security-and-limits
+  namespace: apps
+spec:
+  headers:
+    customFrameOptionsValue: "SAMEORIGIN"
+    contentTypeNosniff: true
+    browserXssFilter: true
+    referrerPolicy: "strict-origin-when-cross-origin"
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+  rateLimit:
+    average: 50
+    burst: 20

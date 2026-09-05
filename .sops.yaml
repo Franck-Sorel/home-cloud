@@ -1,0 +1,11 @@
+# SOPS configuration — encrypts secret values at rest in git.
+# Doc: docs/07-iac-gitops/03-secrets-in-git.md
+#
+# Public age key goes here; the PRIVATE Gx key never touches this repo.
+# Generate with:  age-keygen -o ~/.config/sops/age/keys.txt
+
+creation_rules:
+  - path_regex: deploy/secrets/.*\.ya?ml$
+    age: AGE-SECRET-KEY-1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0000000000000000xxxx  # ← your PUBLIC age key
+  - path_regex: terraform/.*\.tfvars$
+    age: AGE-SECRET-KEY-1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0000000000000000xxxx

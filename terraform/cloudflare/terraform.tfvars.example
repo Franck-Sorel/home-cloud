@@ -1,0 +1,11 @@
+# Home-Cloud — Terraform (Cloudflare edge)
+#
+# Doc: docs/07-iac-gitops/01-terraform.md
+#
+# Copy to terraform.tfvars and fill in (NEVER commit terraform.tfvars).
+# Prefer environment variables in CI: export CLOUDFLARE_API_TOKEN=...
+
+CLOUDFLARE_API_TOKEN = "your-api-token-goes-here"
+CLOUDFLARE_ACCOUNT_ID = "your-cloudflare-account-id"
+zone                   = "mycloud.com"
+tunnel_id              = "your-tunnel-id-from-cloudflared-tunnel-list"

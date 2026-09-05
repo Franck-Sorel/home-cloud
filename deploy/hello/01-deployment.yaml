@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+  namespace: apps
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+        - name: hello
+          image: hashicorp/http-echo:latest
+          args: ["-listen=:8080", "-text=Welcome to home-cloud 🚀"]
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+          livenessProbe:
+            httpGet: { path: /, port: 8080 }
+          readinessProbe:
+            httpGet: { path: /, port: 8080 }

@@ -1,0 +1,17 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hello
+  namespace: apps
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`hello.mycloud.com`)
+      kind: Rule
+      middlewares:
+        - name: security-and-limits
+          namespace: apps
+      services:
+        - name: hello
+          port: 80

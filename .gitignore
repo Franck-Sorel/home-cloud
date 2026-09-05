@@ -1,0 +1,44 @@
+# --- Secrets & credentials (never commit) ---
+*.env
+.env
+*.tfvars
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+*.pem
+*.key
+*.p12
+*.pfx
+keys.txt
+.age
+*.age
+*.id_rsa
+*.json.enc
+secrets/
+*.creds
+
+# --- Cloudflare ---
+**.cloudflared/**
+tunnel-id.json
+credentials.json
+~/.cloudflared/
+
+# --- Kubernetes / kubeconfig ---
+kubeconfig
+k3s.yaml
+*.kubeconfig
+
+# --- Git / editors ---
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# --- logs / artifacts ---
+*.log
+log/
+artifacts/
+
+# --- SOPS local keys (public sops.yaml stays) ---
+sops_age_key.txt
+.mistralrun/
