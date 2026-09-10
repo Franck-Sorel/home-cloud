@@ -1,8 +1,8 @@
 name: e2e
 
-# End-to-end validation: boots a REAL single-node k3s cluster in CI (k3d =
-# k3s inside Docker), installs the Helm bundles in dependency order, then
-# proves the stacks interoperate with cross-stack assertions.
+# End-to-end validation: boots a REAL k3s cluster in CI (bare get.k3s.io
+# install, per docs/02-setup/01-install-k3s) with our own Traefik v3, then
+# installs the Helm bundles in dependency order and checks they interoperate.
 #
 # This is deliberately different from `ci.yml` / `just validate` (static
 # accuracy: helm lint+render, shellcheck, yamllint). This workflow actually
@@ -28,8 +28,8 @@ jobs:
       contents: read
     env:
       # NOTE: `runner` context is NOT allowed in job-level env, so the
-      # kubeconfig path is not set here — k3d writes to the default
-      # ~/.kube/config and we rely on kubectl's default context.
+      # kubeconfig path is not set here — we point the default ~/.kube/config
+      # at k3s right after install (see "Point the default kubeconfig" step).
       DOMAIN: mycloud.com
       # `cloudflare` mode renders the base hello IngressRoute as web-only and
       # skips the mode=ddns DDNS CronJob (whose ddns-credentials Secret cannot
@@ -53,47 +53,47 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v5
 
-      # --- Boot a real single-node k3s cluster with k3d (k3s, not kind) ----
-      - name: Install k3d
+      # --- Boot a real k3s cluster using the documented get.k3s.io install ---
+      - name: Install k3s (bare)
         run: |
-          curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh \
-            | TAG=v5.9.0 bash
-          k3d version
+          # k3s, installed via the official script (the docs' own path).
+          # We DISABLE the bundled Traefik so it cannot conflict with the
+          # Traefik v3 chart we install ourselves as our ingress controller.
+          curl -sfL https://get.k3s.io \
+            | sudo INSTALL_K3S_VERSION="v1.36.3+k3s1" \
+              K3S_KUBECONFIG_MODE="644" \
+              sh -s - --disable traefik
+          kubectl wait --for=condition=Ready node --all --timeout=180s
+          kubectl version --short
 
-      - name: Create k3d / k3s cluster
+      - name: Point the default kubeconfig at k3s
         run: |
-          # Pin a modern k3s image (v1.36 bundles Traefik v3 CRDs / the
-          # traefik.io/v1alpha1 group our manifests use) and DISABLE the
-          # k3s-bundled Traefik so it cannot conflict with the Traefik v3
-          # chart we install ourselves below.
-          k3d cluster create e2e \
-            --image rancher/k3s:v1.36.3-k3s1 \
-            --k3s-arg "--disable=traefik@server:0" \
-            --port 80:80@loadbalancer \
-            --port 443:443@loadbalancer \
-            --wait \
-            --timeout 300s
-          kubectl config use-context k3d-e2e
-          k3d cluster list
+          mkdir -p ~/.kube
+          sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+          sudo chown "$(id -u):$(id -g)" ~/.kube/config
+          chmod 600 ~/.kube/config
+          kubectl get nodes -o wide
 
       - name: Install Traefik v3 (our ingress controller)
         run: |
           set -euo pipefail
-          kubectl wait --for=condition=Ready node --all --timeout=180s
-          # We disabled the k3s-bundled Traefik when creating the cluster, so
-          # install OUR Traefik v3 chart (matches the traefik.io/v1alpha1
-          # CRDs our manifests use). Its chart installs its own CRDs too.
+          # k3s was started with --disable traefik, so we install OUR Traefik v3
+          # chart (matches the traefik.io/v1alpha1 CRDs our manifests use). The
+          # chart installs its own CRDs, and k3s's servicelb backs its
+          # LoadBalancer service on the node IP.
           helm repo add traefik https://traefik.github.io/charts
           helm install traefik traefik/traefik -n kube-system --create-namespace
           kubectl -n kube-system rollout status deployment/traefik --timeout=240s
-          kubectl get nodes -o wide
           kubectl -n kube-system get pods -o wide
+          kubectl get svc -n kube-system traefik
 
-      # No real public DNS in CI: point our hostnames at the cluster-local
-      # Traefik (localhost). k3d maps host 80 -> the k3s LoadBalancer -> Traefik.
-      - name: Map bundle hostnames to cluster-local Traefik
+      # No real public DNS in CI: point our hostnames at the k3s node's
+      # InternalIP, where k3s servicelb exposes the Traefik LoadBalancer.
+      - name: Map bundle hostnames to the cluster node IP
         run: |
-          sudo bash -c 'echo "127.0.0.1 hello.mycloud.com" >> /etc/hosts'
+          NODEIP=$(kubectl get node -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' | tr ' ' '\n' | head -1)
+          echo "node IP: $NODEIP"
+          sudo bash -c "echo '$NODEIP hello.mycloud.com' >> /etc/hosts"
           grep hello.mycloud.com /etc/hosts
 
       # ======================================================================
@@ -144,7 +144,24 @@ jobs:
           running=$(kubectl get pods -A --no-headers 2>/dev/null | grep -c Running || true)
           [[ "$running" -ge 3 ]] || { echo "✘ too few Running pods ($running)"; exit 1; }
           code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://hello.mycloud.com/ || true)
-          [[ "$code" == "200" ]] || { echo "✘ hello HTTP $code (expected 200)"; exit 1; }
+          if [[ "$code" != "200" ]]; then
+            echo "✘ hello HTTP $code (expected 200)"
+            echo "--- diagnostics ---"
+            echo "### hello IngressRoute"
+            kubectl -n apps get ingressroute hello -o yaml || true
+            echo "### all IngressRoutes"
+            kubectl get ingressroute -A || true
+            echo "### traefik pod logs (last 40)"
+            kubectl -n kube-system logs deploy/traefik --tail=40 || true
+            echo "### traefik svc + endpoints"
+            kubectl -n kube-system get svc traefik -o wide || true
+            kubectl -n kube-system get endpoints traefik || true
+            echo "### hello svc + endpoints + pods"
+            kubectl -n apps get svc hello -o wide || true
+            kubectl -n apps get endpoints hello || true
+            kubectl -n apps get pods -o wide || true
+            exit 1
+          fi
           echo "✔ smoke OK — $running Running pods, hello HTTP $code via cluster-local Traefik"
           echo "  (API_URL health probe skipped: no api backend is deployed by these bundles)"
 
