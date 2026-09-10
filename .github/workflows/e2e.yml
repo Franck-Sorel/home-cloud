@@ -302,14 +302,19 @@ jobs:
         run: |
           # enabled: base, auth, storage, registry, security  (tls disabled: no DNS/LE in CI)
           # disabled: secrets, serverless, observability
-          # Vendor the bundle subcharts from the local file: deps first
+          # Vendor the bundle subcharts from the local file: deps first.
           helm dependency build bundles/home-cloud
+          # Pass security.namespaces as a REAL YAML list via -f: --set list
+          # syntax ({...}) is inconsistent across Helm versions and leaked the
+          # default "secrets" namespace, which is disabled here.
+          printf 'security:\n  namespaces:\n    - apps\n    - auth\n    - storage\n    - registry\n' > "$RUNNER_TEMP/agg-values.yaml"
           helm upgrade --install home-cloud bundles/home-cloud \
+            -f "$RUNNER_TEMP/agg-values.yaml" \
             --set base.enabled=true --set base.domain=mycloud.com --set base.mode=cloudflare --set base.tls.enabled=false --set base.connectors.enabled=false \
             --set auth.enabled=true --set auth.domain=mycloud.com --set auth.tls.enabled=false \
             --set storage.enabled=true --set storage.domain=mycloud.com --set storage.tls.enabled=false \
             --set registry.enabled=true --set registry.domain=mycloud.com --set registry.tls.enabled=false \
-            --set security.enabled=true --set security.namespaces="{apps,auth,storage,registry}" \
+            --set security.enabled=true \
             --set secrets.enabled=false --set serverless.enabled=false --set observability.enabled=false
 
       - name: Wait for aggregator hello rollout + pods
