@@ -37,7 +37,7 @@ jobs:
       # base's cloudflared template dir is empty, so this is a plain ingress test.
       MODE: cloudflare
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # --- Same tooling as ci.yml: just + helm, plus kubectl for assertions ---
       - name: Install Just
@@ -46,49 +46,46 @@ jobs:
           tool: just
 
       - name: Install Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
         with:
           version: "v3.15.4"
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@v5
 
       # --- Boot a real single-node k3s cluster with k3d (k3s, not kind) ----
       - name: Install k3d
         run: |
           curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh \
-            | TAG=v5.6.3 bash
+            | TAG=v5.9.0 bash
           k3d version
 
       - name: Create k3d / k3s cluster
         run: |
+          # Pin a modern k3s image (v1.36 bundles Traefik v3 CRDs / the
+          # traefik.io/v1alpha1 group our manifests use) and DISABLE the
+          # k3s-bundled Traefik so it cannot conflict with the Traefik v3
+          # chart we install ourselves below.
           k3d cluster create e2e \
+            --image rancher/k3s:v1.36.3-k3s1 \
+            --k3s-arg "--disable=traefik" \
             --port 80:80@loadbalancer \
             --port 443:443@loadbalancer \
             --wait \
-            --timeout 240s
+            --timeout 300s
           kubectl config use-context k3d-e2e
           k3d cluster list
 
-      - name: Wait for control plane + ensure Traefik (IngressRoute CRDs)
+      - name: Install Traefik v3 (our ingress controller)
         run: |
           set -euo pipefail
           kubectl wait --for=condition=Ready node --all --timeout=180s
-          # k3d does NOT ship the k3s-bundled Traefik as deployments/traefik.
-          # Our bundles need Traefik's IngressRoute/Middleware CRDs, so install
-          # the real Traefik chart to make the test deterministic.
-          if kubectl -n kube-system rollout status deployment/traefik --timeout=45s 2>/dev/null; then
-            echo "traefik already running"
-          else
-            echo "traefik not detected — installing traefik/traefik (v2) via helm"
-            helm repo add traefik https://traefik.github.io/charts
-            # Pin to the Traefik v2 chart so it reconciles the LEGACY
-            # traefik.containo.us/v1alpha1 IngressRoute/Middleware CRDs this
-            # repo's manifests (and k3s) use. Traefik v3 ignores that group.
-            helm install traefik traefik/traefik -n kube-system \
-              --create-namespace --skip-crds --version 25.0.0
-            kubectl -n kube-system rollout status deployment/traefik --timeout=240s
-          fi
+          # We disabled the k3s-bundled Traefik when creating the cluster, so
+          # install OUR Traefik v3 chart (matches the traefik.io/v1alpha1
+          # CRDs our manifests use). Its chart installs its own CRDs too.
+          helm repo add traefik https://traefik.github.io/charts
+          helm install traefik traefik/traefik -n kube-system --create-namespace
+          kubectl -n kube-system rollout status deployment/traefik --timeout=240s
           kubectl get nodes -o wide
           kubectl -n kube-system get pods -o wide
 
@@ -369,7 +366,7 @@ jobs:
       # ======================================================================
       - name: Archive E2E results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-junit
           path: |

@@ -52,7 +52,7 @@ curl localhost:8080/health        # healthy internally
 ### Step 2 — create the IngressRoute
 `deploy/apps/sample-api/ingressroute.yaml`:
 ```yaml
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: sample-api

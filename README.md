@@ -211,7 +211,7 @@ This repository is licensed under the **MIT License** — see [`LICENSE`][licens
 <!-- ===== Link definitions ===== -->
 [license-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license]: LICENSE
-[k3s-badge]: https://img.shields.io/badge/k3s-v1.29-green.svg
+[k3s-badge]: https://img.shields.io/badge/k3s-v1.36-green.svg
 [k3s]: https://k3s.io
 [cloudflare-badge]: https://img.shields.io/badge/Cloudflare%20Tunnel-free-blueviolet
 [cloudflare]: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/

@@ -162,7 +162,7 @@ Traefik middleware run *before* your app — the AWS "API Gateway" behaviors:
 
 **`middleware.yaml`** (namespace `apps`)
 ```yaml
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: security-and-limits
@@ -196,7 +196,7 @@ ingress:
 Standard `Ingress` is fine; **Traefik CRDs** unlock middleware references, delegation, TCP routes, TLS config. Pattern for every later service:
 
 ```yaml
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: hello

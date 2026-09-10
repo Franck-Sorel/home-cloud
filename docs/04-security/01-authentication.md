@@ -31,7 +31,7 @@
 ### A. Create the middleware
 `deploy/auth/forwardauth-middleware.yaml`:
 ```yaml
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: forwardauth-keycloak

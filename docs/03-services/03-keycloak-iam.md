@@ -61,7 +61,7 @@ kubectl get secret keycloak-credentials -n auth -o jsonpath='{.data.password}' |
 
 `deploy/auth/keycloak-ingressroute.yaml`:
 ```yaml
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: keycloak
@@ -111,7 +111,7 @@ The pattern: **Traefik forwardAuth middleware → Keycloak OIDC** before traffic
 
 `deploy/auth/middleware.yaml` (conceptual — see repo for full):
 ```yaml
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: forwardauth-keycloak

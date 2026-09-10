@@ -61,7 +61,7 @@ kubectl exec -n secrets vault-0 -- vault login <root-token>
 
 `deploy/secrets/vault-ingressroute.yaml`:
 ```yaml
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: vault

@@ -109,7 +109,7 @@ spec:
 
 ### E. IngressRoute (Traefik CRD, the richer form we recommend)
 ```yaml
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: myapi
