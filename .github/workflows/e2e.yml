@@ -302,6 +302,8 @@ jobs:
         run: |
           # enabled: base, auth, storage, registry, security  (tls disabled: no DNS/LE in CI)
           # disabled: secrets, serverless, observability
+          # Vendor the bundle subcharts from the local file: deps first
+          helm dependency build bundles/home-cloud
           helm upgrade --install home-cloud bundles/home-cloud \
             --set base.enabled=true --set base.domain=mycloud.com --set base.mode=cloudflare --set base.tls.enabled=false --set base.connectors.enabled=false \
             --set auth.enabled=true --set auth.domain=mycloud.com --set auth.tls.enabled=false \
