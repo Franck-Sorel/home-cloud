@@ -1,0 +1,8 @@
+apiVersion: v2
+name: home-cloud-auth
+description: >
+  Identity layer — Keycloak as the OIDC/SAML identity provider and a Traefik
+  forwardAuth middleware so any service can be "login-protected" at the edge.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

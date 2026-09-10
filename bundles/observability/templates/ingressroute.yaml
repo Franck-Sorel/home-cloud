@@ -1,0 +1,26 @@
+{{- if .Values.stack.enabled }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    {{- include "hc-obs.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+    {{- if .Values.tls.enabled }} - websecure {{- end }}
+  routes:
+    - match: Host(`{{ include "hc-obs.fqdn" (dict "host" .Values.stack.grafanaHost "domain" .Values.domain) }}`)
+      kind: Rule
+      services:
+        - name: grafana
+          port: {{ .Values.stack.grafanaPort }}
+  {{- if .Values.tls.enabled }}
+  tls:
+    certResolver: {{ .Values.tls.certResolver }}
+    domains:
+      - main: {{ .Values.domain }}
+        sans: ["*.{{ .Values.domain }}"]
+  {{- end }}
+{{- end }}

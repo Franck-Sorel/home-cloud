@@ -1,0 +1,26 @@
+{{- if .Values.openfaas.enabled }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: faas-gateway
+  namespace: serverless
+  labels:
+    {{- include "hc-sls.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+    {{- if .Values.tls.enabled }} - websecure {{- end }}
+  routes:
+    - match: Host(`{{ include "hc-sls.fqdn" (dict "host" .Values.openfaas.host "domain" .Values.domain) }}`)
+      kind: Rule
+      services:
+        - name: gateway
+          port: {{ .Values.openfaas.gatewayPort }}
+  {{- if .Values.tls.enabled }}
+  tls:
+    certResolver: {{ .Values.tls.certResolver }}
+    domains:
+      - main: {{ .Values.domain }}
+        sans: ["*.{{ .Values.domain }}"]
+  {{- end }}
+{{- end }}

@@ -43,7 +43,10 @@ home-cloud/
 │   ├── 06-testing/                ← Verify it works & expose a service to the world
 │   ├── 07-iac-gitops/             ← Infrastructure-as-Code & GitOps (Terraform, ArgoCD)
 │   └── 08-roadmap/                ← Roadmap, roadmap to AWS-parity, future work
+├── bundles/                       ← Composable Helm bundles (choose what to deploy) + home-cloud aggregator
+├── justfile                       ← `just validate` / `just deploy <bundle>` / `just package`
 ├── scripts/                       ← Reusable helper scripts (bash)
+├── .github/workflows/             ← CI validation + OCI release
 ├── deploy/                        ← Kubernetes YAML / Helm values / manifests
 ├── examples/                      ← Sample services and demo applications
 └── LICENSE
@@ -160,6 +163,7 @@ Everything you need to complete the direct setup path:
 | [`06-testing`][testing] | Verify cluster, smoke tests, expose service publicly | 🚀 Direct setup |
 | [`07-iac-gitops`][iacgitops] | Terraform, Ansible, GitOps with ArgoCD | 🚀 Direct setup / Curious |
 | [`08-roadmap`][roadmap] | Roadmap to AWS-parity, future work, known limits | 🧐 Curious |
+| [`09-bundles`][bundles] | **Composable bundle packages + validation pipeline + networking models** | 🚀 All |
 
 ---
 
@@ -215,5 +219,6 @@ This repository is licensed under the **MIT License** — see [`LICENSE`][licens
 [expose]: docs/06-testing/02-expose-service.md
 [iacgitops]: docs/07-iac-gitops/README.md
 [roadmap]: docs/08-roadmap/README.md
+[bundles]: docs/09-bundles/README.md
 [scripts]: scripts/README.md
 [scripts-readme]: scripts/README.md

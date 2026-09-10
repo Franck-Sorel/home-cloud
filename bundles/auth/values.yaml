@@ -1,0 +1,41 @@
+# =============================================================================
+# home-cloud-auth values
+# =============================================================================
+
+domain: "mycloud.com"
+
+# --- Identity provider (IdP) ------------------------------------------------
+# The bundle wires Keycloak as your OIDC provider. To keep this chart
+# self-contained and publishable, Keycloak itself is installed from its
+# upstream chart (codecentric/keycloakx) — see README + NOTES for the EXACT
+# `helm install` command and required Secret. This chart provides:
+#   * the `auth` Namespace
+#   * the public IngressRoute -> Keycloak admin console
+#   * a forwardAuth middleware that gates every app behind Keycloak login
+keycloak:
+  enabled: true
+  host: "auth"          # subdomain -> auth.mycloud.com
+  # Upstream chart "codecentric/keycloakx" — install separately:
+  #   helm install keycloak codecentric/keycloakx \
+  #     --namespace auth --create-namespace \
+  #     --set hostname.hostname=auth.mycloud.com \
+  #     --set postgresql.enabled=true
+  apiPort: 8080
+  adminUsername: "admin"
+  # HOW the admin password is supplied: a Secret named `keycloak-admin` with key `password`
+  existingSecret: "keycloak-admin"
+
+# --- Traefik forwardAuth gate ------------------------------------------------
+# Any workload appended to the `protected-gate` middleware list will require a
+# valid session. The middleware forwards to an OIDC reverse proxy (commonly
+# oauth2-proxy or the Void-OSS/vouch proxy) that talks to Keycloak.
+forwardAuth:
+  enabled: true
+  # Service that performs the OIDC auth dance in front of Keycloak.
+  # Set this to the name of your oauth2-proxy (or vouch) Service.
+  proxyService: "oauth2-proxy"
+  proxyNamespace: "auth"
+  proxyPort: 80
+  # Credentials for the OIDC client (client_id/client_secret) go into a Secret;
+  # see README. This chart wires authHeaderField for the app to consume.
+  authHeaderField: "X-Forwarded-User"

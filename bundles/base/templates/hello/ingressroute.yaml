@@ -1,0 +1,33 @@
+{{- if .Values.demoApp.enabled }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hello
+  namespace: apps
+  labels:
+    {{- include "hc.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+  {{- if and .Values.tls.enabled (eq .Values.mode "ddns") }}
+    - websecure
+  {{- end }}
+  routes:
+    - match: Host(`{{ include "hc.fqdn" (dict "host" .Values.demoApp.host "domain" .Values.domain) }}`)
+      kind: Rule
+      middlewares:
+        - name: security-and-limits
+          namespace: apps
+      services:
+        - name: hello
+          port: 80
+  {{- if and .Values.tls.enabled (eq .Values.mode "ddns") }}
+  tls:
+    # Traefik's built-in ACME resolver (see traefik-values.yaml in this bundle).
+    certResolver: le
+    domains:
+      - main: {{ .Values.domain }}
+        sans:
+          - "*.{{ .Values.domain }}"
+  {{- end }}
+{{- end }}

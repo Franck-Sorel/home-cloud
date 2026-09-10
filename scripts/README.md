@@ -14,6 +14,11 @@ Reusable helper scripts for the private cloud. Each is a thin, documented wrappe
 | [`healthcheck.sh`](healthcheck.sh) | Five-layer health check (host → cluster → tunnel → TLS → routes → services) | [`docs/06-testing/00-verify-cluster.md`](../docs/06-testing/00-verify-cluster.md) |
 | [`smoke.sh`](smoke.sh) | Lightweight smoke test for use in CronJobs / CI | [`docs/06-testing/03-smoke-and-e2e.md`](../docs/06-testing/03-smoke-and-e2e.md) |
 | [`backup.sh`](backup.sh) | Trigger a Velero backup schedule and verify it completed | [`docs/06-testing/04-backup-restore.md`](../docs/06-testing/04-backup-restore.md) |
+| [`validate.sh`](validate.sh) | **Accuracy pipeline** — helm lint+render, shellcheck, yamllint, terraform | [`docs/09-bundles/04-pipeline.md`](../docs/09-bundles/04-pipeline.md) |
+| [`apply.sh`](apply.sh) | Install the bundle(s) **you choose** into your cluster | [`docs/09-bundles/01-bundles.md`](../docs/09-bundles/01-bundles.md) |
+| [`package.sh`](package.sh) | Build every bundle into release `.tgz` packages | [`docs/09-bundles/04-pipeline.md`](../docs/09-bundles/04-pipeline.md) |
+
+> These are wrapped by the `justfile` (`just validate`, `just deploy`, `just package`, `just publish`).
 
 ---
 

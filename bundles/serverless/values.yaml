@@ -1,0 +1,19 @@
+# =============================================================================
+# home-cloud-serverless values
+# =============================================================================
+
+domain: "mycloud.com"
+
+tls:
+  enabled: true
+  certResolver: le
+
+openfaas:
+  enabled: true
+  host: "faas"
+  gatewayPort: 8080
+  # Installed from openfaas chart:
+  #   helm install openfaas openfaas/openfaas \
+  #     --namespace serverless --create-namespace \
+  #     --set basic_auth=true --set functionNamespace=openfaas-fn
+  basicAuth: true

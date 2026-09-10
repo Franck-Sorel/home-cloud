@@ -1,0 +1,19 @@
+# =============================================================================
+# home-cloud-observability values
+# =============================================================================
+
+domain: "mycloud.com"
+
+tls:
+  enabled: true
+  certResolver: le
+
+stack:
+  enabled: true
+  grafanaHost: "grafana"
+  grafanaPort: 80
+  # Installed from grafana/kube-prometheus-stack (Prometheus + Grafana):
+  #   helm install monitoring grafana/kube-prometheus-stack \
+  #     --namespace monitoring --create-namespace
+  # Loki (logs) is installed from grafana/loki-stack:
+  #   helm install loki grafana/loki-stack --namespace monitoring

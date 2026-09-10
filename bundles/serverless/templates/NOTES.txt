@@ -1,0 +1,26 @@
+## 1) Apply this bundle (namespace + routing)
+
+    helm install serverless oci://ghcr.io/Franck-Sorel/home-cloud-serverless \
+      --set domain=mycloud.com
+
+or locally: `just apply serverless domain=mycloud.com`
+
+## 2) Install OpenFaaS (upstream chart)
+
+    helm repo add openfaas https://openfaas.github.io/faas-netes/
+    helm upgrade --install openfaas openfaas/openfaas \
+      --namespace serverless --create-namespace \
+      --set basic_auth=true \
+      --set functionNamespace=openfaas-fn \
+      --set gateway.directFunctions=false
+
+    # deploy a hello function
+    faas-cli login --gateway https://faas.mycloud.com --password $PASSWORD
+    faas-cli new hello --lang python
+    faas-cli up
+
+## 3) Where it maps
+
+- AWS Lambda   → OpenFaaS functions (`faas.mycloud.com`)
+- FaaS gateway → `gateway` Service, port 8080
+- GitOps-friendly: functions deployed via `faas-cli` and stored in git.

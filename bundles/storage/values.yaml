@@ -1,0 +1,23 @@
+# =============================================================================
+# home-cloud-storage values
+# =============================================================================
+
+domain: "mycloud.com"
+
+# TLS termination: same model as `base` — set enabled=false for Cloudflare mode.
+tls:
+  enabled: true
+  certResolver: le
+
+minio:
+  enabled: true
+  # subdomains for the API and the web console
+  apiHost: "storage"
+  consoleHost: "storage-console"
+  apiPort: 9000
+  consolePort: 9001
+  # Installed from bitnami chart:
+  #   helm install minio oci://registry-1.docker.io/bitnamicharts/minio \
+  #     --namespace storage --create-namespace \
+  #     --set auth.rootPassword=... --set auth.rootUser=...
+  bucket: "notes"

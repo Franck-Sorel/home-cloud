@@ -1,0 +1,27 @@
+dependencies:
+- name: home-cloud-base
+  repository: file://../base
+  version: 0.1.0
+- name: home-cloud-auth
+  repository: file://../auth
+  version: 0.1.0
+- name: home-cloud-storage
+  repository: file://../storage
+  version: 0.1.0
+- name: home-cloud-secrets
+  repository: file://../secrets
+  version: 0.1.0
+- name: home-cloud-serverless
+  repository: file://../serverless
+  version: 0.1.0
+- name: home-cloud-registry
+  repository: file://../registry
+  version: 0.1.0
+- name: home-cloud-observability
+  repository: file://../observability
+  version: 0.1.0
+- name: home-cloud-security
+  repository: file://../security
+  version: 0.1.0
+digest: sha256:47c31abd9409dc072ac4e615d8739c2bd78b4aba6e7bca2418d58da1b4b812ca
+generated: "2026-09-10T12:25:41.247723792+01:00"

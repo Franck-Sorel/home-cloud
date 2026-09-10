@@ -1,0 +1,32 @@
+# yamllint configuration for the home-cloud repo.
+# Used by `scripts/validate.sh` and CI. See rules: https://yamllint.readthedocs.io
+#
+# Goal: catch STRUCTURAL errors (bad indentation, wrong YAML, empty values,
+# duplicate keys). We explicitly relax cosmetic style rules to match this repo's
+# established conventions (compact flow maps like { cpu: 50m } and files with or
+# without a trailing newline), since those are not correctness issues.
+extends: default
+
+rules:
+  # Go-template tolerance for Helm templates
+  comments: disable
+  comments-indentation: disable
+  document-start: disable
+  line-length:
+    max: 160
+    level: warning
+
+  # K8s manifests routinely use compact flow maps — cosmetic, not a bug
+  braces: disable
+  brackets: disable
+  colons: disable
+
+  # Trailing newline is conventional but not a correctness issue
+  new-line-at-end-of-file: disable
+
+  # Unquoted YAML booleans used by K8s
+  truthy:
+    allowed-values: ["true", "false", "on", "off", "yes", "no"]
+
+  # Errors caught by default (not overridden above): syntax, indentation,
+  # trailing-spaces, empty-values, duplicates, key-duplicates, etc.

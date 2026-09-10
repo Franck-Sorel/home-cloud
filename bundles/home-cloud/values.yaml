@@ -1,0 +1,50 @@
+# =============================================================================
+# home-cloud aggregator values
+#
+# Enable/disable entire bundles here. Each section embeds the values of the
+# matching bundle chart (its own values.yaml). Everything is OFF except base.
+# =============================================================================
+
+# --- Required core -----------------------------------------------------------
+base:
+  enabled: true
+  mode: "ddns"          # "ddns" ($0, deSEC/Dynu + LE) | "cloudflare"
+  domain: "mycloud.com"
+  acmeEmail: "admin@mycloud.com"
+  ddns:
+    provider: "desec"   # "desec" | "dynu"
+  demoApp:
+    enabled: true
+
+# --- Optional capabilities ----------------------------------------------------
+auth:
+  enabled: false
+  domain: "mycloud.com"
+
+storage:
+  enabled: false
+  domain: "mycloud.com"
+
+secrets:
+  enabled: false
+  domain: "mycloud.com"
+
+serverless:
+  enabled: false
+  domain: "mycloud.com"
+
+registry:
+  enabled: false
+  domain: "mycloud.com"
+
+observability:
+  enabled: false
+  domain: "mycloud.com"
+
+security:
+  enabled: true         # default-deny NetworkPolicies; safe with any set
+  namespaces:
+    - apps
+    - storage
+    - auth
+    - secrets

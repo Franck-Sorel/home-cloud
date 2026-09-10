@@ -1,0 +1,51 @@
+name: release
+
+# Publish every bundle (and the aggregator) as an OCI Helm chart on a version
+# tag (e.g. v0.1.0). Users then install by choosing bundles:
+#
+#   helm install auth oci://ghcr.io/Franck-Sorel/home-cloud/auth --version 0.1.0
+#   helm pull oci://ghcr.io/Franck-Sorel/home-cloud/home-cloud   # aggregator
+#
+# Requires a GitHub token with `packages: write` on the repository.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.15.4"
+
+      - name: Derive chart version from tag
+        id: ver
+        run: echo "CHART_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Package all bundles
+        run: DIST="dist" ./scripts/package.sh
+
+      - name: Login to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io \
+            --username "${{ github.actor }}" --password-stdin
+
+      - name: Push every bundle chart to ghcr.io
+        env:
+          REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+          CHART_VERSION: ${{ steps.ver.outputs.CHART_VERSION }}
+        run: |
+          set -euo pipefail
+          for f in dist/*.tgz; do
+            echo "→ pushing $f"
+            helm push "$f" "oci://${REGISTRY}"
+          done

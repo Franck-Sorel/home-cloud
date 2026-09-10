@@ -1,0 +1,70 @@
+# =============================================================================
+# home-cloud-base values
+# =============================================================================
+
+# --- Ingress / networking mode ----------------------------------------------
+# Choose how your cluster reaches the internet:
+#   "ddns"       → $0 path: DDNS (deSEC/Dynu) + Let's Encrypt DNS-01 + Traefik
+#                 (requires a reachable IP / port-forward 80+443 from router)
+#   "cloudflare" → no open ports: Cloudflare Tunnel via the cloudflared pod
+#                 (best for CGNAT / hiding your home IP)
+mode: "ddns"
+
+# Your public domain. In "cloudflare" mode this is a zone managed by Cloudflare.
+domain: "mycloud.com"
+
+# Email used purely as a registration identifier for Let's Encrypt (DDNS mode).
+acmeEmail: "admin@mycloud.com"
+
+# --- DDNS ($0 path; used when mode=ddns) --------------------------------------
+ddns:
+  provider: "desec"        # "desec" | "dynu"
+  # deSEC token (authtoken) or Dynu username/password — provide via --set-file or
+  # a Secret you create; never hardcode. The updater CronJob reads env from a Secret.
+  token: ""
+  dynuUser: ""
+  dynuPassword: ""
+  hostname: "mycloud.com"  # full DDNS hostname to keep updated
+  schedule: "*/5 * * * *"  # how often to refresh the public IP
+  image:
+    repository: "curlimages/curl"
+    tag: "8.10.1"
+
+# --- TLS ($0 path; used when mode=ddns) --------------------------------------
+# HTTPS comes from Traefik's built-in ACME resolver doing DNS-01 against the
+# DDNS provider (deSEC.io / Dynu — both supported by LEGO). See
+# traefik-values.yaml in this bundle for how to wire it into the k3s Traefik.
+# No cert-manager needed.
+tls:
+  enabled: true
+
+# --- Cloudflare Tunnel (used when mode=cloudflare) ----------------------------
+cloudflare:
+  # Tunnel ID + credentials are normally injected via the `cloudflared` Secret
+  # (managed in deploy/.git-private or a Secret controller). The pod reads them.
+  tunnelId: ""
+  image:
+    repository: "cloudflare/cloudflared"
+    tag: "2024.12.2"
+  replicas: 2
+
+# --- Demo application ("hello") ----------------------------------------------
+demoApp:
+  enabled: true
+  image:
+    repository: "hashicorp/http-echo"
+    tag: "latest"
+    pullPolicy: "IfNotPresent"
+  replicas: 2
+  text: "Welcome to home-cloud 🚀"
+  resources:
+    requests: { cpu: 50m, memory: 32Mi }
+    limits:   { cpu: 200m, memory: 128Mi }
+  # hostname used by the IngressRoute (subdomain of domain above)
+  host: "hello"
+
+# --- Traefik IngressRoute middleware (shared by all bundles) ------------------
+middleware:
+  rateLimit:
+    average: 50
+    burst: 20

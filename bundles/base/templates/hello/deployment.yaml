@@ -1,0 +1,46 @@
+{{- if .Values.demoApp.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+  namespace: apps
+  labels:
+    {{- include "hc.labels" . | nindent 4 }}
+    app: hello
+spec:
+  replicas: {{ .Values.demoApp.replicas }}
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: hello
+          image: "{{ .Values.demoApp.image.repository }}:{{ .Values.demoApp.image.tag }}"
+          imagePullPolicy: {{ .Values.demoApp.image.pullPolicy }}
+          args:
+            - "-listen=:8080"
+            - "-text={{ .Values.demoApp.text }}"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: {{ toYaml .Values.demoApp.resources.requests | nindent 14 }}
+            limits:   {{ toYaml .Values.demoApp.resources.limits | nindent 14 }}
+          livenessProbe:
+            httpGet: { path: /, port: 8080 }
+          readinessProbe:
+            httpGet: { path: /, port: 8080 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+{{- end }}

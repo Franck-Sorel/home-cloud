@@ -1,0 +1,9 @@
+apiVersion: v2
+name: home-cloud-storage
+description: >
+  Object storage with MinIO (S3-compatible counterpart of AWS S3).
+  Wires the storage Namespace, public IngressRouting and connector values;
+  MinIO itself is installed from the bitnami chart (see NOTES).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

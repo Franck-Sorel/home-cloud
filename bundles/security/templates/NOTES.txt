@@ -1,0 +1,25 @@
+## 1) Apply this bundle (hardening)
+
+    helm install security oci://ghcr.io/Franck-Sorel/home-cloud-security
+
+or locally: `just deploy security`
+
+## 2) What it does
+
+Creates default-deny NetworkPolicies (no ingress/egress by default) on the
+namespaces you deployed, keeping every pod isolated until you explicitly allow
+traffic. It leaves the essential kube-dns egress open so your apps can still
+resolve names.
+
+- `default-deny-ingress` — nothing can reach your pods unless you add rules
+- `default-deny-egress` — pods can't dial out except DNS
+
+Narrow the set with:
+
+    --set namespaces={apps,storage,auth,secrets}
+
+## 3) Compatibility
+
+Safe to add last, on top of any bundle set. Layered with the `base` middleware
+(security headers + rate-limit), authentication (`auth` bundle), Cloudflare WAF
+(Terraform, edge side) = defence in depth.

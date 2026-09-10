@@ -1,0 +1,15 @@
+{{- if .Values.forwardAuth.enabled }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: protected-gate
+  namespace: apps
+  labels:
+    {{- include "hc-auth.labels" . | nindent 4 }}
+spec:
+  forwardAuth:
+    address: "http://{{ .Values.forwardAuth.proxyService }}.{{ .Values.forwardAuth.proxyNamespace }}.svc.cluster.local:{{ .Values.forwardAuth.proxyPort }}"
+    trustForwardHeader: true
+    authResponseHeaders:
+      - {{ .Values.forwardAuth.authHeaderField }}
+{{- end }}

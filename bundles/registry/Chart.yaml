@@ -1,0 +1,9 @@
+apiVersion: v2
+name: home-cloud-registry
+description: >
+  Private container registry with Harbor (counterpart of AWS ECR).
+  Wires the registry Namespace, public IngressRouting and connector values;
+  Harbor itself is installed from the goharbor chart (see NOTES).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

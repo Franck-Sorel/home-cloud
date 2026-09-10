@@ -1,0 +1,66 @@
+# =============================================================================
+# Reference: HTTPS via Traefik's built-in ACME (DNS-01) for the "$0 DDNS" path.
+#
+# WHO THIS IS FOR
+#   When your cluster is reachable from the internet (home IP + router
+#   port-forward 80/443) you don't need Cloudflare. Traefik (bundled in k3s)
+#   can obtain a *wildcard* Let's Encrypt certificate itself using DNS-01,
+#   because its ACME library (LEGO) speaks the deSEC.io and Dynu APIs natively.
+#
+# yielding    *.mycloud.com  →  a wildcard TLS cert, all subdomains HTTPS.
+#
+# WHAT TO DO
+#   1) Install the DDNS updater from the `base` bundle (mode: ddns) so your
+#      public IP stays in sync with your DNS hostname.
+#   2) Provide these values to the k3s Traefik Helm chart so it can solve
+#      DNS-01 challenges automatically.
+#
+# k3s usually deploys Traefik as `helm-traefik` in kube-system. Re-apply it with
+# a merged values file, e.g.:
+#
+#   helm upgrade traefik traefik/traefik -n kube-system -f this-file.yaml
+#
+# =============================================================================
+
+# Pick ONE certificateResolver, commented out the other:
+certificateResolvers:
+
+  le:
+    acme:
+      email: "admin@mycloud.com"          # ← your email (LE account reg)
+      storage: "/data/acme.json"
+      dnsChallenge:
+        provider: desec                    # ← LEGO provider for deSEC.io
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+        # deSEC auth token (set as env on the traefik deployment):
+        #   env: [ { name: DESEC_API_TOKEN, valueFrom: { secretKeyRef: { name: desec-token, key: token } } } ]
+      # ---#{ OR for Dynu }---
+      # provider: dynu
+      # env: [ { name: DYNU_LOGIN,    valueFrom: { secretKeyRef: { name: dynu-credentials, key: login } } },
+      #        { name: DYNU_PASSWORD, valueFrom: { secretKeyRef: { name: dynu-credentials, key: password } } } ]
+
+# Ingress points (ports) Traefik should listen on.
+#   web      :80   -> redirects to websecure
+#   websecure:443  -> terminates TLS with the wildcard cert from `le`
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+# ---------------------------------------------------------------------------
+# Gotchas
+# ---------------------------------------------------------------------------
+# * deSEC SEARCH: your DNS must already publish the challenge record; deSEC
+#   supports the `_acme-challenge` TXT records that LEGO sets/cleans for you.
+# * Port-forward: ensure router forwards 80 AND 443 to the k3s node
+#   (the host OS is untouched — this is router-level, not host firewall).
+# * No open ports / CGNAT? Then skip this file and use `mode: cloudflare`.
+# ---------------------------------------------------------------------------

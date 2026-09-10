@@ -1,0 +1,9 @@
+apiVersion: v2
+name: home-cloud-serverless
+description: >
+  Serverless functions with OpenFaaS (counterpart of AWS Lambda).
+  Wires the serverless Namespace, public IngressRouting and connector values;
+  OpenFaaS itself is installed from the openfaas chart (see NOTES).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

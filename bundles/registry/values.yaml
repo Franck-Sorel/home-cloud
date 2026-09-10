@@ -1,0 +1,19 @@
+# =============================================================================
+# home-cloud-registry values
+# =============================================================================
+
+domain: "mycloud.com"
+
+tls:
+  enabled: true
+  certResolver: le
+
+harbor:
+  enabled: true
+  host: "harbor"
+  corePort: 80
+  # Installed from goharbor chart:
+  #   helm install harbor harbor/harbor \
+  #     --namespace registry --create-namespace \
+  #     --set expose.type=ingress --set externalURL=https://harbor.mycloud.com
+  # Or a lighter Gitea container image registry (docs/03-services/05).

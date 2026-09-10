@@ -1,0 +1,23 @@
+## 1) Apply this bundle (namespace + routing)
+
+    helm install storage oci://ghcr.io/Franck-Sorel/home-cloud-storage \
+      --set domain=mycloud.com
+
+or locally: `just apply storage domain=mycloud.com`
+
+## 2) Install MinIO (upstream bitnami chart)
+
+    helm install minio oci://registry-1.docker.io/bitnamicharts/minio \
+      --namespace storage --create-namespace \
+      --set auth.rootUser=admin \
+      --set auth.rootPassword='CHANGE-ME' \
+      --set persistence.size=20Gi \
+      --set initContainers.enabled=false
+
+Verify: `mc alias set homecloud https://storage.mycloud.com admin 'CHANGE-ME' && mc ls homecloud`
+
+## 3) Where each piece ends up (AWS → self-hosted)
+
+- S3 buckets  → MinIO (`storage.mycloud.com`, port 9000)
+- Bucket web UI → MinIO Console (`storage-console.mycloud.com`, port 9001)
+- Needed by the `mynotes` workshop app (examples/) as the content store.

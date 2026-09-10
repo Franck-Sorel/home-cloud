@@ -1,0 +1,35 @@
+## 1) Apply this bundle (required core)
+
+    helm install base oci://ghcr.io/Franck-Sorel/home-cloud-base \
+      --set domain=mycloud.com --set mode=ddns
+
+or locally: `just deploy base domain=mycloud.com mode=ddns`
+
+## 2) Provide one credential Secret, depending on mode
+
+- **mode=ddns** (default, $0): DDNS updater needs a Secret `ddns-credentials`:
+
+      # deSEC:
+      kubectl create secret generic ddns-credentials -n apps --from-literal=DESEC_TOKEN=YOUR_AUTH_TOKEN
+      # Dynu:
+      kubectl create secret generic ddns-credentials -n apps \
+        --from-literal=DYNU_USER=you --from-literal=DYNU_PASSWORD=YOUR_PASS
+
+  The updater keeps your public IP pointed at your hostname (deSEC/Dynu DynDNS2).
+
+- **mode=cloudflare** (no open ports): the cloudflared pod needs a Secret
+  `cloudflared-credentials` containing the tunnel credentials JSON:
+
+      kubectl create secret -n cloudflared generic cloudflared-credentials \
+        --from-file=credentials.json=~/.cloudflared/<tunnel-id>.json
+
+## 3) HTTPS on your public subdomains
+
+- **ddns**: Traefik's built-in ACME resolver gets the *wildcard*
+  `*.mycloud.com` certificate. Wire it into the k3s Traefik chart using
+  `bundles/base/traefik-values.yaml` (see comments in that file).
+- **cloudflare**: TLS is terminated at the Cloudflare edge — nothing to do in-cluster.
+
+## 4) Verify
+
+    curl https://hello.mycloud.com     # "Welcome to home-cloud 🚀"

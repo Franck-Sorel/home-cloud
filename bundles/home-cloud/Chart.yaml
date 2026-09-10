@@ -1,0 +1,41 @@
+apiVersion: v2
+name: home-cloud
+description: >
+  Aggregator chart: enable exactly the bundles you want for your private cloud.
+  The base bundle is on by default; every other capability is opt-in.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: home-cloud-base
+    version: "0.1.0"
+    repository: "file://../base"
+    condition: base.enabled
+  - name: home-cloud-auth
+    version: "0.1.0"
+    repository: "file://../auth"
+    condition: auth.enabled
+  - name: home-cloud-storage
+    version: "0.1.0"
+    repository: "file://../storage"
+    condition: storage.enabled
+  - name: home-cloud-secrets
+    version: "0.1.0"
+    repository: "file://../secrets"
+    condition: secrets.enabled
+  - name: home-cloud-serverless
+    version: "0.1.0"
+    repository: "file://../serverless"
+    condition: serverless.enabled
+  - name: home-cloud-registry
+    version: "0.1.0"
+    repository: "file://../registry"
+    condition: registry.enabled
+  - name: home-cloud-observability
+    version: "0.1.0"
+    repository: "file://../observability"
+    condition: observability.enabled
+  - name: home-cloud-security
+    version: "0.1.0"
+    repository: "file://../security"
+    condition: security.enabled

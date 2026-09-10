@@ -1,0 +1,30 @@
+{{- if .Values.defaultDenyEgress }}
+{{- range .Values.namespaces }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: {{ . }}
+  labels:
+    {{- include "hc-security.labels" $ | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]
+  {{- if $.Values.allowBasic.dns }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+  {{- end }}
+---
+{{- end }}
+{{- end }}

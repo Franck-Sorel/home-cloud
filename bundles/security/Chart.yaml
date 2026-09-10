@@ -1,0 +1,8 @@
+apiVersion: v2
+name: home-cloud-security
+description: >
+  Security layer — default-deny NetworkPolicies, namespace isolation and
+  pod-hardening defaults. Safe to layer on top of any set of bundles.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

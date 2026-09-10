@@ -1,0 +1,26 @@
+{{- if .Values.harbor.enabled }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: harbor
+  namespace: registry
+  labels:
+    {{- include "hc-reg.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+    {{- if .Values.tls.enabled }} - websecure {{- end }}
+  routes:
+    - match: Host(`{{ include "hc-reg.fqdn" (dict "host" .Values.harbor.host "domain" .Values.domain) }}`)
+      kind: Rule
+      services:
+        - name: harbor-portal
+          port: {{ .Values.harbor.corePort }}
+  {{- if .Values.tls.enabled }}
+  tls:
+    certResolver: {{ .Values.tls.certResolver }}
+    domains:
+      - main: {{ .Values.domain }}
+        sans: ["*.{{ .Values.domain }}"]
+  {{- end }}
+{{- end }}

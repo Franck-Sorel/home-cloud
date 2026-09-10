@@ -1,0 +1,41 @@
+{{- if eq .Values.mode "ddns" }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ddns-updater
+  namespace: apps
+  labels:
+    {{- include "hc.labels" . | nindent 4 }}
+spec:
+  schedule: "{{ .Values.ddns.schedule }}"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: update
+              image: "{{ .Values.ddns.image.repository }}:{{ .Values.ddns.image.tag }}"
+              command: ["/bin/sh", "/config/update.sh"]
+              envFrom:
+                - secretRef:
+                    name: ddns-credentials
+              volumeMounts:
+                - name: script
+                  mountPath: /config
+                  readOnly: true
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+          volumes:
+            - name: script
+              configMap:
+                name: ddns-update
+                defaultMode: 0555
+{{- end }}

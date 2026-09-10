@@ -1,0 +1,35 @@
+{{- if eq .Values.mode "ddns" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ddns-update
+  namespace: apps
+  labels:
+    {{- include "hc.labels" . | nindent 4 }}
+data:
+  update.sh: |
+    #!/bin/sh
+    # DynDNS2-compatible updater for deSEC.io and Dynu.
+    # Detects own public IPv4, then tells the provider to point <HOSTNAME> at it.
+    set -eu
+    PROVIDER="{{ .Values.ddns.provider }}"
+    HOSTNAME="{{ .Values.ddns.hostname }}"
+    IP="$(curl -sf --max-time 10 https://api.ipify.org || curl -sf --max-time 10 https://ifconfig.me || true)"
+    [ -n "${IP}" ] || { echo "could not determine public IP"; exit 1; }
+    case "${PROVIDER}" in
+      desec)
+        # basic auth: username=<authtoken>, empty password
+        curl -sf --max-time 15 -u "${DESEC_TOKEN}:" \
+          "https://update.dedyn.io/nic/update?hostname=${HOSTNAME}&myip=${IP}" \
+          && echo "deSEC updated ${HOSTNAME} -> ${IP}" || exit 1
+        ;;
+      dynu)
+        curl -sf --max-time 15 -u "${DYNU_USER}:${DYNU_PASSWORD}" \
+          "https://api.dynu.com/nic/update?hostname=${HOSTNAME}&myip=${IP}" \
+          && echo "Dynu updated ${HOSTNAME} -> ${IP}" || exit 1
+        ;;
+      *)
+        echo "unsupported provider ${PROVIDER}" >&2; exit 1
+        ;;
+    esac
+{{- end }}

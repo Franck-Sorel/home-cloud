@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: storage
+  labels:
+    {{- include "hc-storage.labels" . | nindent 4 }}
+    pod-security.kubernetes.io/enforce: baseline

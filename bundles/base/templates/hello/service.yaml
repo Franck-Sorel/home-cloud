@@ -1,0 +1,16 @@
+{{- if .Values.demoApp.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello
+  namespace: apps
+  labels:
+    {{- include "hc.labels" . | nindent 4 }}
+    app: hello
+spec:
+  selector:
+    app: hello
+  ports:
+    - port: 80
+      targetPort: 8080
+{{- end }}

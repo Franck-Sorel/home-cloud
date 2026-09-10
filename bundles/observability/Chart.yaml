@@ -1,0 +1,10 @@
+apiVersion: v2
+name: home-cloud-observability
+description: >
+  Observability stack — Prometheus (metrics) + Loki (logs) + Grafana
+  (dashboards), the counterpart of AWS CloudWatch. Wires the monitoring
+  Namespace, public IngressRouting and connector values; the heavy charts are
+  installed from the grafana/grafana kube-prometheus-stack (see NOTES).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,47 @@
+This chart wires your identity layer (Keycloak) and the edge gate that protects
+every app behind a login. It is self-contained and publishable; the heavy
+Keycloak workload is installed from its upstream chart via one command.
+
+## 1) Apply this bundle
+
+    helm install auth oci://ghcr.io/Franck-Sorel/home-cloud-auth \
+      --set domain=mycloud.com
+
+or locally:
+
+    just apply auth domain=mycloud.com
+
+## 2) Install Keycloak itself (upstream chart, codecentric/keycloakx)
+
+Prompts for the admin password, stores it in a Secret, then deploys Keycloak:
+
+    helm repo add codecentric https://codecentric.github.io/helm-charts
+    helm install keycloak codecentric/keycloakx \
+      --namespace auth --create-namespace \
+      --set hostname.hostname=auth.mycloud.com \
+      --set hostname.admin=auth.mycloud.com \
+      --set replicas=1 \
+      --set postgresql.enabled=true
+
+## 3) Configure the reverse proxy for OIDC (oauth2-proxy)
+
+The `protected-gate` middleware trusts an `oauth2-proxy` Service in the `auth`
+namespace. Provision it pointing at your Keycloak realm/client:
+
+- Create an OAuth2 client in Keycloak (realm e.g. `mynotes`, client `oauth2-proxy`)
+- Store the client secret: `kubectl create secret generic oauth2-proxy-credentials -n auth`
+- Install/provision oauth2-proxy where its Service matches
+  `forwardAuth.proxyService` / `proxyNamespace` / `proxyPort`.
+
+## 4) Protect any service
+
+Add `protected-gate` to the service's IngressRoute `middlewares` list, next to
+the `security-and-limits` middleware from `base`:
+
+    middlewares:
+      - name: security-and-limits   # from base bundle
+        namespace: apps
+      - name: protected-gate        # from this bundle
+        namespace: apps
+
+Users must now log in through Keycloak before reaching the service.

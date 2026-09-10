@@ -1,0 +1,53 @@
+{{- if .Values.minio.enabled }}
+# MinIO S3-compatible API
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: minio-api
+  namespace: storage
+  labels:
+    {{- include "hc-storage.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+    {{- if .Values.tls.enabled }} - websecure {{- end }}
+  routes:
+    - match: Host(`{{ include "hc-storage.fqdn" (dict "host" .Values.minio.apiHost "domain" .Values.domain) }}`)
+      kind: Rule
+      services:
+        - name: minio
+          port: {{ .Values.minio.apiPort }}
+  {{- if .Values.tls.enabled }}
+  tls:
+    certResolver: {{ .Values.tls.certResolver }}
+    domains:
+      - main: {{ .Values.domain }}
+        sans: ["*.{{ .Values.domain }}"]
+  {{- end }}
+---
+# MinIO web console
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: minio-console
+  namespace: storage
+  labels:
+    {{- include "hc-storage.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+    {{- if .Values.tls.enabled }} - websecure {{- end }}
+  routes:
+    - match: Host(`{{ include "hc-storage.fqdn" (dict "host" .Values.minio.consoleHost "domain" .Values.domain) }}`)
+      kind: Rule
+      services:
+        - name: minio-console
+          port: {{ .Values.minio.consolePort }}
+  {{- if .Values.tls.enabled }}
+  tls:
+    certResolver: {{ .Values.tls.certResolver }}
+    domains:
+      - main: {{ .Values.domain }}
+        sans: ["*.{{ .Values.domain }}"]
+  {{- end }}
+{{- end }}

@@ -1,0 +1,27 @@
+## 1) Apply this bundle (namespace + routing)
+
+    helm install registry oci://ghcr.io/Franck-Sorel/home-cloud-registry \
+      --set domain=mycloud.com
+
+or locally: `just apply registry domain=mycloud.com`
+
+## 2) Install Harbor (upstream goharbor chart)
+
+    helm repo add harbor https://helm.goharbor.io
+    helm install harbor harbor/harbor \
+      --namespace registry --create-namespace \
+      --set expose.type=ingress \
+      --set externalURL=https://harbor.mycloud.com \
+      --set core.tls.enabled=false
+
+Then push your sample-api / mynotes images here:
+
+    docker tag sample-api:v1 harbor.mycloud.com/library/sample-api:v1
+    docker login harbor.mycloud.com
+    docker push harbor.mycloud.com/library/sample-api:v1
+
+## 3) Where it maps
+
+- AWS ECR → Harbor (`harbor.mycloud.com`)
+- Container registries are consumed by the `base` demo and the `mynotes` app
+  via `imagePullSecrets` (see examples/).

@@ -31,3 +31,14 @@ terraform apply
   `export CLOUDFLARE_API_TOKEN=...`
 - Optionally commit an *encrypted* `terraform.tfvars` via SOPS
   ([`docs/07-iac-gitops/03-secrets-in-git.md`](../../docs/07-iac-gitops/03-secrets-in-git.md)).
+
+---
+
+## When you DON'T need this (the $0 path)
+
+This Terraform is only for the **Cloudflare Tunnel** network model. If you use
+the **$0 DDNS** model instead (deSEC.io/Dynu + Let's Encrypt + a router
+port-forward), there is **no edge infra to manage as code** — the DDNS updater
+runs *inside* the cluster (see the `base` bundle) and Traefik issues wildcard
+certs via DNS-01. See
+[`docs/09-bundles/02-networking-models.md`](../../docs/09-bundles/02-networking-models.md).

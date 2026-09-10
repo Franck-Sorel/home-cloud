@@ -1,0 +1,49 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Validate that every artifact in the repo is ACCURATE before it is trusted:
+#   helm lint + render, shellcheck, yamllint, terraform fmt+validate.
+# This is the same suite as `just validate` (just = local one-liner).
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.15.4"
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.5"
+
+      - name: Install yamllint
+        run: pip install --user yamllint
+
+      - name: Add yamllint to PATH + helm plugin deps
+        run: |
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          helm plugin list >/dev/null 2>&1 || true
+
+      - name: Validate (helm lint + render + shellcheck + yamllint + terraform)
+        run: just validate
+
+      - name: Confirm no secrets are committed
+        run: |
+          if git grep -nE '(password|token|secret): *["'"'"'][^"'"'"']{4,}' deploy/ config/ -- '*.yaml' '*.yml' | grep -vE '\{\{[^}]*\}\}'; then
+            echo "possible hardcoded secret found" && exit 1
+          fi
+          echo "no obvious committed secrets"

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: home-cloud-base
+description: >
+  Base layer for the private cloud: shared namespaces, the Traefik security
+  middleware, the first demo service ("hello"), TLS for public domains, a DDNS
+  updater ($0 path: deSEC/Dynu) OR a Cloudflare Tunnel (no-open-ports path).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,15 @@
+{{- if .Values.defaultDenyIngress }}
+{{- range .Values.namespaces }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: {{ . }}
+  labels:
+    {{- include "hc-security.labels" $ | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+{{- end }}
+{{- end }}

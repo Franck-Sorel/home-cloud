@@ -1,0 +1,28 @@
+## 1) Apply this bundle (namespace + routing)
+
+    helm install observability oci://ghcr.io/Franck-Sorel/home-cloud-observability \
+      --set domain=mycloud.com
+
+or locally: `just apply observability domain=mycloud.com`
+
+## 2) Install Prometheus + Grafana (upstream kube-prometheus-stack)
+
+    helm repo add grafana https://grafana.github.io/helm-charts
+    helm install monitoring grafana/kube-prometheus-stack \
+      --namespace monitoring --create-namespace \
+      --set grafana.ingress.enabled=false   # we route via Traefik IngressRoute
+
+## 3) Install Loki (logs) — optional but recommended
+
+    helm install loki grafana/loki-stack --namespace monitoring
+
+## 4) Wire Grafana data sources
+
+- Prometheus → metrics (`sample-api` and `hello` expose /metrics)
+- Loki       → logs (k8s, Traefik, and app logs)
+
+## 5) Where it maps
+
+- AWS CloudWatch Logs/Metrics → Loki + Prometheus
+- AWS CloudWatch Dashboards    → Grafana
+- AWS CloudWatch Alarms/SNS    → Alertmanager → email/Telegram

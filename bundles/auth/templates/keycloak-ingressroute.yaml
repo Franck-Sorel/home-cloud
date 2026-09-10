@@ -1,0 +1,25 @@
+{{- if .Values.keycloak.enabled }}
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: keycloak
+  namespace: auth
+  labels:
+    {{- include "hc-auth.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - web
+    - websecure
+  routes:
+    - match: Host(`{{ include "hc-auth.fqdn" (dict "host" .Values.keycloak.host "domain" .Values.domain) }}`)
+      kind: Rule
+      services:
+        - name: keycloak
+          port: {{ .Values.keycloak.apiPort }}
+  tls:
+    certResolver: le
+    domains:
+      - main: {{ .Values.domain }}
+        sans:
+          - "*.{{ .Values.domain }}"
+{{- end }}
