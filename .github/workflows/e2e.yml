@@ -27,7 +27,9 @@ jobs:
     permissions:
       contents: read
     env:
-      KUBECONFIG: "${{ runner.temp }}/k3d/kubeconfig.yaml"
+      # NOTE: `runner` context is NOT allowed in job-level env, so the
+      # kubeconfig path is not set here — k3d writes to the default
+      # ~/.kube/config and we rely on kubectl's default context.
       DOMAIN: mycloud.com
       # `cloudflare` mode renders the base hello IngressRoute as web-only and
       # skips the mode=ddns DDNS CronJob (whose ddns-credentials Secret cannot
@@ -65,8 +67,7 @@ jobs:
             --port 443:443@loadbalancer \
             --wait \
             --timeout 240s
-          mkdir -p "$(dirname "$KUBECONFIG")"
-          k3d kubeconfig write e2e > "$KUBECONFIG"
+          kubectl config use-context k3d-e2e
           k3d cluster list
 
       - name: Wait for control plane + Traefik
@@ -366,4 +367,4 @@ jobs:
         run: |
           { echo "## ☁️ home-cloud E2E result"; echo; \
             echo "Phases: **Phase 1** (step-by-step bundle boot + cross-stack A–E) and **Phase 3** (aggregator enabled/disabled, check F)."; \
-            echo; echo "See the `e2e-junit` artifact and the logs above for granular assertions."; } >> "$GITHUB_STEP_SUMMARY"
+            echo; echo "See the e2e-junit artifact and the logs above for granular assertions."; } >> "$GITHUB_STEP_SUMMARY"
