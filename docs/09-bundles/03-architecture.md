@@ -23,7 +23,7 @@ graph TD
 
     subgraph Home["Your Ubuntu machine (k3s)"]
         subgraph Ingress["Traefik Ingress"]
-            MW[security-and-limits<br/>headers + rate-limit]
+            MW[security-headers + security-limits<br/>headers + rate-limit]
             FA[protected-gate<br/>forwardAuth → Keycloak]
         end
         subgraph NS1["apps + auth + storage"]

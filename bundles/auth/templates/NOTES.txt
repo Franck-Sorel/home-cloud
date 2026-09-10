@@ -36,12 +36,14 @@ namespace. Provision it pointing at your Keycloak realm/client:
 ## 4) Protect any service
 
 Add `protected-gate` to the service's IngressRoute `middlewares` list, next to
-the `security-and-limits` middleware from `base`:
+the security middleware from `base` (`security-headers` + `security-limits`):
 
     middlewares:
-      - name: security-and-limits   # from base bundle
+      - name: security-headers   # from base bundle
         namespace: apps
-      - name: protected-gate        # from this bundle
+      - name: security-limits    # from base bundle
+        namespace: apps
+      - name: protected-gate     # from this bundle
         namespace: apps
 
 Users must now log in through Keycloak before reaching the service.

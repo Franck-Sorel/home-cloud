@@ -158,14 +158,18 @@ Two supported models in this project:
 
 ## 6. Middleware: add rate limiting + security headers (the API-gateway bit)
 
-Traefik middleware run *before* your app — the AWS "API Gateway" behaviors:
+Traefik middleware run *before* your app — the AWS "API Gateway" behaviors.
+
+> **Traefik v3 note:** a `Middleware` may contain **only one type**, so we ship
+> **two** middleware instead of the old combined one (which had headers +
+> rate-limit in a single object).
 
 **`middleware.yaml`** (namespace `apps`)
 ```yaml
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: security-and-limits
+  name: security-headers
   namespace: apps
 spec:
   headers:
@@ -173,18 +177,27 @@ spec:
     contentTypeNosniff: true
     browserXssFilter: true
     referrerPolicy: "strict-origin-when-cross-origin"
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-limits
+  namespace: apps
+spec:
   rateLimit:
     average: 50
     burst: 20
 ```
 
-**Attach it** via an annotation on an ingress, or via `IngressRoute`:
+**Attach both** via an annotation on an ingress, or via `IngressRoute`:
 
 ```yaml
 ingress:
   metadata:
     annotations:
-      traefik.ingress.kubernetes.io/router.middlewares: apps-security-and-limits@kubernetescrd
+      traefik.ingress.kubernetes.io/router.middlewares: apps-security-headers@kubernetescrd,apps-security-limits@kubernetescrd
 ```
 
 > `certExtractor` note: with edge TLS (model A) the middleware sees HTTP; with Full-strict it sees HTTPS. Keep that in mind when writing header policy.
@@ -208,7 +221,9 @@ spec:
     - match: Host(`hello.mycloud.com`)
       kind: Rule
       middlewares:
-        - name: security-and-limits
+        - name: security-headers
+          namespace: apps
+        - name: security-limits
           namespace: apps
       services:
         - name: hello
@@ -241,7 +256,7 @@ Each simply gets its own route + Service; Traefik does the rest. No new tunnel e
 |---------|-----|
 | `curl https://hello.mycloud.com/` → 404 | No matching Ingress/IngressRoute yet — check `kubectl get ingress -A` |
 | Traefik pod restarting | `kubectl logs -n kube-system deploy/traefik` |
-| Middleware not applied | middleware must exist in the namespace referenced (`apps-security-and-limits@kubernetescrd`) |
+| Middleware not applied | middlewares must exist in the namespace referenced (`apps-security-headers@kubernetescrd`, `apps-security-limits@kubernetescrd`) |
 | Route gives same app on all subdomains | your tunnel `*.mycloud.com` rule forwards everything to Traefik, which *should* be splitting by host — check `Host()` match in route |
 
 ---

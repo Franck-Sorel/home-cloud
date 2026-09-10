@@ -65,7 +65,9 @@ spec:
     - match: Host(`storage.mycloud.com`) && PathPrefix(`/`)
       kind: Rule
       middlewares:
-        - name: security-and-limits
+        - name: security-headers
+          namespace: apps
+        - name: security-limits
           namespace: apps
       services:
         - name: minio

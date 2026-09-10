@@ -41,7 +41,9 @@ spec:
     - match: Host(`grafana.mycloud.com`)
       kind: Rule
       middlewares:
-        - name: security-and-limits
+        - name: security-headers
+          namespace: apps
+        - name: security-limits
           namespace: apps
       services:
         - name: grafana

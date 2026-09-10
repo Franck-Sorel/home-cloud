@@ -16,7 +16,7 @@ the opt-in bundles, then security last**:
 
 | Order | Bundle(s) | Why here |
 |-------|-----------|----------|
-| 1 | **base** | Creates the `apps` namespace, the shared `security-and-limits` Traefik Middleware, and the `hello` demo. Everything else *routes through* or *reads from* `apps`. |
+| 1 | **base** | Creates the `apps` namespace, the `security-headers` + `security-limits` Traefik v3 Middlewares (one type each), and the `hello` demo. Everything else *routes through* or *reads from* `apps`. |
 | 2 | **auth storage secrets serverless registry observability** | Each creates its own namespace + Traefik IngressRoute (and `auth` adds the `protected-gate` Middleware into `apps`). They are independent of each other but all sit *inside* the base-provided cluster ingress. |
 | 3 | **security** | Applies **default-deny NetworkPolicies** onto the *already-existing* namespaces. It must run **last**: it hardens whatever is already there—if it ran first there'd be nothing to protect, and its default target namespaces (`apps, storage, auth, secrets`) wouldn't all exist yet. |
 
@@ -33,7 +33,7 @@ against a set of namespaces you haven't created will fail Helm (see
 
 | Step | What runs | Exit criterion |
 |------|-----------|----------------|
-| Boot | `k3d cluster create e2e --port 80:80@loadbalancer ...` | `kubectl get nodes` → 1 node `Ready`; Traefik Deployment rolled out |
+| Boot | bare k3s via `curl -sfL https://get.k3s.io` (k3s v1.36.3, `--disable traefik`); install **our own Traefik v3** chart; map hostnames to the Traefik LoadBalancer EXTERNAL-IP (`curl --noproxy '*'`, since the runner sets an HTTP_PROXY) | `kubectl get nodes` → 1 node `Ready`; Traefik Deployment rolled out |
 | Host alias | `sudo ... 127.0.0.1 hello.mycloud.com` in `/etc/hosts` | hostname resolves to cluster-local Traefik (no public DNS) |
 | Deploy | `apply.sh base` → `apply.sh auth storage secrets serverless registry observability` → `apply.sh security` | each `helm upgrade --install` returns 0; bundles listed in `✔ bundles applied` |
 | Wait | `kubectl -n apps rollout status deploy/hello` + all pods | hello `Available`, no non-Running pods |
@@ -47,7 +47,7 @@ against a set of namespaces you haven't created will fail Helm (see
 |----|-----------|-------------------------|
 | **A1** | `hello` Deployment has available replicas | base's demo workload is serving |
 | **A2** | `curl http://hello.mycloud.com/` → `200` + expected body | **base ↔ Traefik IngressRoute** interop (the route exists and works through the real ingress) |
-| **B1** | `security-and-limits` Middleware exists **and** is attached to the hello route | **base** wiring: the route references the shared middleware |
+| **B1** | `security-headers` **and** `security-limits` Middlewares exist **and** are both attached to the hello route | **base** wiring: the route references the shared middlewares |
 | **B2** | `curl -I` shows `X-Content-Type-Options: nosniff` + `X-Frame-Options: SAMEORIGIN` | the middleware's **SecurityHeaders are applied on the wire** |
 | **C1** | `protected-gate` Middleware exists, pointing at `oauth2-proxy.auth.svc` | **auth** layer present and correctly configured (presence only—see 03) |
 | **D1** | namespaces `apps auth storage secrets serverless registry monitoring` exist | **every enabled bundle** actually created its namespace |
@@ -89,7 +89,7 @@ tls     : disabled (base.tls.enabled=false → no DNS/LE in CI)
 
 | Stage | Rough time |
 |-------|-----------|
-| k3d cluster boot (pull k3s image) | 1–3 min |
+| bare k3s boot via get.k3s.io (k3s v1.36.3, --disable traefik) + Traefik v3 install | 1–3 min |
 | Phase 1 install + rollout + assert | 2–4 min |
 | Phase 3 aggregator + assert | 1–2 min |
 | **Total** | **≈ 5–9 min** |

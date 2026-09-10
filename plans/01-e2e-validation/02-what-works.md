@@ -29,15 +29,16 @@ requires a real machine with the upstream charts installed (see
 
 ### 🧱 base — fully working (layer 1 *and* a real demo)
 
-`bundles/base/` renders: `apps` namespace, the `security-and-limits` Traefik
-Middleware, and the `hello` Deployment + Service + IngressRoute (`hashicorp/
-http-echo`). In `mode=ddns` it also renders a DDNS CronJob; in `mode=cloudflare`
-it renders **nothing extra** (the `cloudflare/` template dir is empty).
+`bundles/base/` renders: `apps` namespace, the `security-headers` (headers) +
+`security-limits` (rate-limit) Traefik v3 Middlewares, and the `hello`
+Deployment + Service + IngressRoute (`hashicorp/http-echo`). In `mode=ddns` it
+also renders a DDNS CronJob; in `mode=cloudflare` it renders **nothing extra**
+(the `cloudflare/` template dir is empty).
 
 **Proven by CI:** `hello` is served through the Traefik IngressRoute, the
-`security-and-limits` middleware is attached, and `curl -I` shows the
-**SecurityHeaders on the wire** (`X-Content-Type-Options: nosniff`,
-`X-Frame-Options: SAMEORIGIN`).
+`security-headers` and `security-limits` middlewares are both attached, and
+`curl -I` shows the **SecurityHeaders on the wire**
+(`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`).
 
 **Not proven in CI:** the DDNS CronJob actually updating a Dynamic DNS record,
 and any TLS cert issuance (see 03).
@@ -102,7 +103,7 @@ bundles' artifacts are all present and a disabled bundle is *verifiably absent*
 
 ## Cross-stack behavior: what's proven by CI vs needs a real machine
 
-| "Works together" claim | Proven by CI (k3d) | Needs a real machine |
+| "Works together" claim | Proven by CI (bare k3s + our Traefik v3) | Needs a real machine |
 |------------------------|---------------------|----------------------|
 | `hello` → Traefik IngressRoute → HTTP 200 | ✅ | — |
 | Security middleware attached + headers on the wire | ✅ | — |

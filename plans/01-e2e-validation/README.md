@@ -10,18 +10,21 @@ terraform). That proves the charts are *well-formed*, but a templated manifest
 and a *running* service are different things.
 
 This plan adds the missing half: **[`.github/workflows/e2e.yml`](../../.github/workflows/e2e.yml)**
-boots a real single-node **k3s cluster in CI** (via **k3d**, so it matches this
-project's k3s reality rather than kind), installs the bundles in dependency
-order, waits for pods, and then runs **cross-stack assertions** that prove
-"each stack works together" (hello served through Traefik, security headers on
-the wire, the auth middleware present, namespaces + NetworkPolicies created,
-and the aggregator enabling exactly what you asked).
+boots a real single-node **bare k3s cluster in CI** (via the official
+`curl -sfL https://get.k3s.io` script, k3s v1.36.3, started with
+`--disable traefik` so it installs **our own Traefik v3** chart), installs the
+bundles in dependency order, waits for pods, and then runs **cross-stack
+assertions** that prove "each stack works together" (hello served through
+Traefik, security headers on the wire, the auth middleware present,
+namespaces + NetworkPolicies created, and the aggregator enabling exactly what
+you asked).
 
 ```
 ┌─────────────┐    ┌───────────────────────────────────────────────────────┐
 │ manual run / │▶▶▶│  e2e.yml  (workflow_dispatch | nightly cron)           │
 │ nightly     │    │                                                       │
-└─────────────┘    │  1. k3d cluster create  (real k3s in Docker)           │
+└─────────────┘    │  1. boot bare k3s (get.k3s.io, k3s v1.36.3,           │
+                   │     --disable traefik) + install our Traefik v3 chart │
                    │  2. apply.sh base  →  opt-in bundles →  security       │
                    │  3. wait: hello rollout + pods Running                 │
                    │  4. healthcheck + smoke  (adapted: no public DNS)      │
@@ -88,4 +91,5 @@ It is deliberately **not** wired to `pull_request`: it's heavy and slow, and
 This plan complements the [test/verify docs](../../docs/06-testing/README.md)
 and the [bundles & release docs](../../docs/09-bundles/README.md), and pairs
 with the [multi-node virtualization plan](../02-virtualization-layer/README.md)
-(when you want the same E2E story on real separate nodes, not k3d).
+(when you want the same E2E story on real separate nodes going past the
+single-node bare k3s CI cluster).

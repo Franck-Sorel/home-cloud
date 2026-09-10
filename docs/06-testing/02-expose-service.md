@@ -63,7 +63,9 @@ spec:
     - match: Host(`sample.mycloud.com`)
       kind: Rule
       middlewares:
-        - name: security-and-limits     # rate-limit + headers middleware
+        - name: security-headers     # middleware (Traefik v3: one type each)
+          namespace: apps
+        - name: security-limits      # rate-limit middleware
           namespace: apps
       services:
         - name: sample-api

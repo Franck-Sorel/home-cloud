@@ -72,7 +72,9 @@ spec:
     - match: Host(`secrets.mycloud.com`)
       kind: Rule
       middlewares:
-        - name: security-and-limits
+        - name: security-headers
+          namespace: apps
+        - name: security-limits
           namespace: apps
       services:
         - name: vault

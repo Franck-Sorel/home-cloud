@@ -17,7 +17,7 @@ saying what doesn't work is itself a signal of reliability.
 |-------|--------------------|------------|
 | **No public DNS / Let's Encrypt DNS-01** | CI has no owned domain and no DNS/LE credentials | The workflow forces `tls.enabled=false` and checks over cluster-local HTTP; real certs are a manual/real-host step |
 | **No Cloudflare Tunnel** | needs a tunnel token + a Cloudflare account | `mode=cloudflare` is used **only** to skip the DDNS CronJob; the `cloudflared` pod templates are empty, so E2E is a plain ingress test (healthcheck L2 is skipped) |
-| **No multi-node** | k3d is single-node | see the [multi-node virtualization plan](../02-virtualization-layer/README.md) |
+| **No multi-node** | the CI cluster is a single-node bare k3s | see the [multi-node virtualization plan](../02-virtualization-layer/README.md) |
 | **No CGNAT / router port-forward** | CI runner has no home router/ISP | only testable on the real home host |
 | **Heavy upstream workloads absent** | MinIO/Vault/OpenFaaS/Harbor/Grafana aren't vendored; pulling them + a DB is heavy and needs creds | E2E proves the *glue*; install upstream charts on a real host to prove the service itself |
 
@@ -37,20 +37,39 @@ found).
 > The E2E workflow must always pass `--set security.namespaces=...` matching
 > the *actually enabled* bundles. This is a real usability bug worth fixing.
 
-### 🚨 default NetPolicies vs Traefik → the base demo would break under an enforcing CNI
+### ✅ default NetPolicies vs Traefik → fixed with `allowTraefikIngress`
 
 `default-deny-ingress` on `apps` blocks **all** ingress into `apps` pods —
-including Traefik, which lives in `kube-system`. So **base + security** is only
-"green" because:
+including Traefik, which lives in `kube-system`. In practice this **502s the
+ingress**: the gateway can reach the route but the backend rejects it. The old
+note below ("would break under an enforcing CNI") is now **observed and fixed**:
 
-- k3d/k3s default `flannel` does **not enforce** NetworkPolicies, and
-- the E2E only asserts the policies are *present*, not that they filter.
+- the **security** bundle ships an `allowTraefikIngress` toggle that renders an
+  **`allow-ingress-from-traefik`** NetworkPolicy (`allowTraefikIngress: true`)
+  per namespace, so the base demo stays reachable through Traefik;
+- the enforcing-CNI nuance isn't fully testable on k3s's default **flannel**
+  (which does **not** enforce NetworkPolicies), but the explicit policy is what
+  makes the ingress survive once an enforcing CNI (e.g. Cilium) is in place.
 
-On an enforcing CNI (e.g. Cilium — the roadmap's suggested swap), installing
-`base` + `security` would make `hello` **unreachable** until you add an
-explicit `Ingress` rule from Traefik. This is a genuine "doesn't work together
-(yet)" finding, consistent with the repo's own
-[known-limits doc](../../docs/08-roadmap/03-known-limits.md#networking-cni-enforcement).
+## Migration lessons (from the real Traefik v3 / bare-k3s move)
+
+- **(a) Traefik v3 requires one type per `Middleware`.** The old combined
+  object (security headers + rate-limit in one Middleware) is rejected
+  ("multi-types middleware not supported") — it was split into
+  `security-headers` and `security-limits`, and routes now list **both**.
+- **(b) Default-deny NetworkPolicies 502 the ingress** unless you explicitly
+  allow Traefik in — fixed with the security bundle's `allowTraefikIngress`
+  (`allow-ingress-from-traefik` per namespace).
+- **(c) The GitHub runner sets an `HTTP_PROXY`**, so cluster-local curls must
+  bypass it with `--noproxy '*'` (otherwise they hit the proxy instead of the
+  bare-k3s Traefik LoadBalancer).
+- **(d) `--set` list overrides like `--set foo={a,b}` are unreliable on
+  subcharts** — prefer giving each bundle dependency an `alias` in the
+  aggregator and passing values with a `-f` values file.
+- **(e) k3d was abandoned in favor of bare k3s.** We tried k3d on the runner;
+  it proved unreliable, so the e2e now boots a **bare k3s** via
+  `curl -sfL https://get.k3s.io` (k3s v1.36.3, `--disable traefik`) and maps
+  hostnames to the Traefik LoadBalancer EXTERNAL-IP.
 
 ### ⚠️ auth `protected-gate` references a service nothing creates
 
