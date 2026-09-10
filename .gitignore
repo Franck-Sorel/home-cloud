@@ -3,6 +3,8 @@
 .env
 *.tfvars
 terraform/.terraform/
+**/.terraform/
+terraform/**/.terraform/
 *.tfstate
 *.tfstate.*
 *.pem
