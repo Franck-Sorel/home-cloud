@@ -63,8 +63,7 @@ jobs:
             | sudo INSTALL_K3S_VERSION="v1.36.3+k3s1" \
               K3S_KUBECONFIG_MODE="644" \
               sh -s - --disable traefik
-          kubectl wait --for=condition=Ready node --all --timeout=180s
-          kubectl version --short
+          sudo systemctl is-active k3s
 
       - name: Point the default kubeconfig at k3s
         run: |
@@ -72,6 +71,7 @@ jobs:
           sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
           sudo chown "$(id -u):$(id -g)" ~/.kube/config
           chmod 600 ~/.kube/config
+          kubectl wait --for=condition=Ready node --all --timeout=240s
           kubectl get nodes -o wide
 
       - name: Install Traefik v3 (our ingress controller)
