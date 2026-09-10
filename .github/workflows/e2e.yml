@@ -1,0 +1,369 @@
+name: e2e
+
+# End-to-end validation: boots a REAL single-node k3s cluster in CI (k3d =
+# k3s inside Docker), installs the Helm bundles in dependency order, then
+# proves the stacks interoperate with cross-stack assertions.
+#
+# This is deliberately different from `ci.yml` / `just validate` (static
+# accuracy: helm lint+render, shellcheck, yamllint). This workflow actually
+# installs the charts into a live cluster and checks the running behaviour.
+#
+# Heavy + slow by nature, so it runs ONLY on manual dispatch or a nightly
+# cron — never on pull_request. A concurrency group prevents overlapping runs.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *" # nightly (UTC)
+
+concurrency:
+  group: e2e-tests
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: boot-bundles-and-assert
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      KUBECONFIG: "${{ runner.temp }}/k3d/kubeconfig.yaml"
+      DOMAIN: mycloud.com
+      # `cloudflare` mode renders the base hello IngressRoute as web-only and
+      # skips the mode=ddns DDNS CronJob (whose ddns-credentials Secret cannot
+      # exist in CI—it would spawn error pods). No real tunnel is created:
+      # base's cloudflared template dir is empty, so this is a plain ingress test.
+      MODE: cloudflare
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Same tooling as ci.yml: just + helm, plus kubectl for assertions ---
+      - name: Install Just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.15.4"
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      # --- Boot a real single-node k3s cluster with k3d (k3s, not kind) ----
+      - name: Install k3d
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh \
+            | TAG=v5.6.3 bash
+          k3d version
+
+      - name: Create k3d / k3s cluster
+        run: |
+          k3d cluster create e2e \
+            --port 80:80@loadbalancer \
+            --port 443:443@loadbalancer \
+            --wait \
+            --timeout 240s
+          mkdir -p "$(dirname "$KUBECONFIG")"
+          k3d kubeconfig write e2e > "$KUBECONFIG"
+          k3d cluster list
+
+      - name: Wait for control plane + Traefik
+        run: |
+          kubectl wait --for=condition=Ready node --all --timeout=180s
+          kubectl -n kube-system rollout status deployment/traefik --timeout=180s
+          kubectl get nodes -o wide
+          kubectl -n kube-system get pods -o wide
+
+      # No real public DNS in CI: point our hostnames at the cluster-local
+      # Traefik (localhost). k3d maps host 80 -> the k3s LoadBalancer -> Traefik.
+      - name: Map bundle hostnames to cluster-local Traefik
+        run: |
+          sudo bash -c 'echo "127.0.0.1 hello.mycloud.com" >> /etc/hosts'
+          grep hello.mycloud.com /etc/hosts
+
+      # ======================================================================
+      # PHASE 1 — step-by-step install in dependency order via apply.sh
+      # base first (everything else builds on its app/middleware namespaces),
+      # then the opt-in bundles, security last on top of all existing namespaces.
+      # ======================================================================
+      - name: Deploy base first (repo tooling)
+        run: |
+          # MODE=cloudflare: web-only ingress, no DDNS CronJob (needs creds),
+          # no tunnel pod (base's cloudflared templates are empty in CI).
+          DOMAIN="$DOMAIN" MODE="$MODE" ./scripts/apply.sh base
+
+      - name: Deploy opt-in bundles (auth storage secrets serverless registry observability)
+        run: |
+          DOMAIN="$DOMAIN" MODE="$MODE" ./scripts/apply.sh auth storage secrets serverless registry observability
+
+      - name: Deploy security bundle last (default-deny NetworkPolicies)
+        run: |
+          DOMAIN="$DOMAIN" MODE="$MODE" ./scripts/apply.sh security
+
+      - name: Wait for hello to be serving + all pods Running
+        run: |
+          kubectl -n apps rollout status deployment/hello --timeout=240s
+          sleep 15
+          kubectl get pods -A
+
+      - name: Healthcheck (adapted for CI — no public DNS / tunnel)
+        run: |
+          set -euo pipefail
+          kubectl cluster-info >/dev/null 2>&1
+          node=$(kubectl get nodes --no-headers | awk '{print $2}' | head -1)
+          [[ "$node" == "Ready" ]] || { echo "✘ L0 node not Ready ($node)"; exit 1; }
+          notrun=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | grep -cv Running || true)
+          [[ "$notrun" -eq 0 ]] || { echo "✘ L1 non-Running kube-system pods: $notrun"; exit 1; }
+          routes=$(kubectl get ingressroute -A --no-headers 2>/dev/null | wc -l)
+          [[ "$routes" -ge 1 ]] || { echo "✘ L4 no IngressRoutes"; exit 1; }
+          down=$(kubectl get pods -A --no-headers 2>/dev/null | grep -cv 'Running\|Completed' || true)
+          [[ "$down" -eq 0 ]] || { echo "✘ L5 non-Running pods cluster-wide: $down"; exit 1; }
+          echo "✔ healthcheck OK — L0 node / L1 kube-system / L4 routes / L5 pods"
+          echo "  (L2 cloudflared tunnel + L3 public TLS skipped: no DNS/LE in CI, see plans/01-e2e-validation/03-what-doesnt.md)"
+
+      - name: Smoke (adapted for CI — cluster-local Traefik)
+        run: |
+          set -euo pipefail
+          running=$(kubectl get pods -A --no-headers 2>/dev/null | grep -c Running || true)
+          [[ "$running" -ge 3 ]] || { echo "✘ too few Running pods ($running)"; exit 1; }
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://hello.mycloud.com/ || true)
+          [[ "$code" == "200" ]] || { echo "✘ hello HTTP $code (expected 200)"; exit 1; }
+          echo "✔ smoke OK — $running Running pods, hello HTTP $code via cluster-local Traefik"
+          echo "  (API_URL health probe skipped: no api backend is deployed by these bundles)"
+
+      - name: Write Phase 1 cross-stack assertions
+        run: |
+          cat > "$RUNNER_TEMP/e2e-phase1.sh" <<'PH1EOF'
+          #!/usr/bin/env bash
+          set -uo pipefail
+          R="${RUNNER_TEMP:-.}"
+          RESULTS="$R/e2e-phase1.txt"; : > "$RESULTS"
+          BODY=""
+          PASS=0; TOTAL=0; FAILURES=0
+          e(){ echo "$1" >> "$RESULTS"; echo "$1"; }
+          run_check(){
+            local name="$1"; shift; TOTAL=$((TOTAL+1))
+            if ( "$@" ) >"$R/chk.out" 2>&1; then
+              PASS=$((PASS+1)); e "✔ $name"
+              BODY+="    <testcase classname=\"phase1\" name=\"$name\"/>\n"
+            else
+              FAILURES=$((FAILURES+1)); e "✘ $name"
+              BODY+="    <testcase classname=\"phase1\" name=\"$name\"><failure/></testcase>\n"
+              sed 's/^/    | /' "$R/chk.out" >&2
+            fi
+          }
+          # (a) hello Deployment Serving + reachable through Traefik IngressRoute
+          assert_hello_deploy(){
+            kubectl -n apps get deployment hello >/dev/null 2>&1 || { echo "hello Deployment missing"; return 1; }
+            local reps
+            reps=$(kubectl -n apps get deployment hello -o jsonpath='{.status.availableReplicas}' 2>/dev/null || true)
+            [[ -n "$reps" && "$reps" -ge 1 ]] || { echo "no available replicas (got '$reps')"; return 1; }
+            echo "hello available replicas: $reps"
+          }
+          assert_hello_traefik(){
+            local code
+            code=$(curl -s -o "$R/hello-body.html" -w '%{http_code}' --max-time 20 http://hello.mycloud.com/ || true)
+            [[ "$code" == "200" ]] || { echo "hello HTTP $code (expected 200)"; return 1; }
+            grep -q "Welcome to home-cloud" "$R/hello-body.html" || { echo "hello body missing expected text"; return 1; }
+            echo "hello HTTP 200 through Traefik IngressRoute (cluster-local)"
+          }
+          # (b) security-and-limits Traefik Middleware attached + SecurityHeaders
+          assert_middleware_attached(){
+            kubectl -n apps get middleware security-and-limits >/dev/null 2>&1 || { echo "middleware security-and-limits missing"; return 1; }
+            local refs
+            refs=$(kubectl -n apps get ingressroute hello -o jsonpath='{.spec.routes[0].middlewares[*].name}' 2>/dev/null || true)
+            echo "$refs" | grep -qw security-and-limits || { echo "hello route not attached to security-and-limits (got: $refs)"; return 1; }
+            echo "security-and-limits present + attached on hello route"
+          }
+          assert_security_headers(){
+            local hdrs
+            hdrs=$(curl -sI --max-time 20 http://hello.mycloud.com/ || true)
+            grep -qi 'X-Content-Type-Options: *nosniff' <<<"$hdrs" \
+              || { echo "missing header X-Content-Type-Options: nosniff"; return 1; }
+            grep -qi 'X-Frame-Options: *SAMEORIGIN' <<<"$hdrs" \
+              || { echo "missing header X-Frame-Options: SAMEORIGIN"; return 1; }
+            echo "SecurityHeaders applied by middleware"
+          }
+          # (c) auth protected-gate middleware present
+          assert_protected_gate(){
+            kubectl -n apps get middleware protected-gate >/dev/null 2>&1 || { echo "protected-gate missing (auth bundle not applied?)"; return 1; }
+            local addr
+            addr=$(kubectl -n apps get middleware protected-gate -o jsonpath='{.spec.forwardAuth.address}' 2>/dev/null || true)
+            echo "$addr" | grep -q 'oauth2-proxy\.auth\.svc\.cluster\.local' || { echo "protected-gate forwardAuth unexpected: $addr"; return 1; }
+            echo "protected-gate (auth) present; forwardAuth -> $addr"
+          }
+          # (d) namespaces for all enabled bundles exist
+          assert_namespaces(){
+            for ns in apps auth storage secrets serverless registry monitoring; do
+              kubectl get namespace "$ns" >/dev/null 2>&1 || { echo "expected namespace missing: $ns"; return 1; }
+            done
+            echo "namespaces present: apps auth storage secrets serverless registry monitoring"
+          }
+          # (e) NetworkPolicies from security bundle present
+          assert_network_policies(){
+            local rc=0
+            for ns in apps auth storage secrets; do
+              kubectl -n "$ns" get networkpolicy default-deny-ingress >/dev/null 2>&1 || { echo "missing default-deny-ingress in $ns"; rc=1; }
+              kubectl -n "$ns" get networkpolicy default-deny-egress  >/dev/null 2>&1 || { echo "missing default-deny-egress in $ns"; rc=1; }
+            done
+            [[ $rc -eq 0 ]] || return 1
+            echo "default-deny NetworkPolicies present (ingress+egress) in apps/auth/storage/secrets"
+          }
+          run_check "A1 hello Deployment serving"            assert_hello_deploy
+          run_check "A2 hello reachable via Traefik IngressRoute" assert_hello_traefik
+          run_check "B1 security-and-limits middleware attached"  assert_middleware_attached
+          run_check "B2 SecurityHeaders applied"                 assert_security_headers
+          run_check "C1 auth protected-gate middleware present"  assert_protected_gate
+          run_check "D1 enabled-bundle namespaces exist"         assert_namespaces
+          run_check "E1 security NetworkPolicies present"        assert_network_policies
+          e ""
+          e "PHASE 1 cross-stack: $PASS/$TOTAL passed, $FAILURES failed"
+          {
+            printf '<?xml version="1.0" encoding="UTF-8"?>\n'
+            printf '<testsuites name="home-cloud-e2e-phase1" tests="%d" failures="%d">\n' "$TOTAL" "$FAILURES"
+            printf '  <testsuite name="cross-stack" tests="%d" failures="%d">\n' "$TOTAL" "$FAILURES"
+            printf '%b' "$BODY"
+            printf '  </testsuite>\n</testsuites>\n'
+          } > "$R/JUnit-phase1.xml"
+          if [[ "$FAILURES" -gt 0 ]]; then echo "✘ E2E PHASE 1 FAILED" >&2; exit 1; else echo "✔ E2E PHASE 1 GREEN"; fi
+          PH1EOF
+          chmod +x "$RUNNER_TEMP/e2e-phase1.sh"
+
+      - name: Run Phase 1 cross-stack assertions
+        run: |
+          bash "$RUNNER_TEMP/e2e-phase1.sh"
+          { echo "## Phase 1 — cross-stack assertions"; echo; echo '```'; cat "$RUNNER_TEMP/e2e-phase1.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # ======================================================================
+      # Teardown Phase 1 so the aggregator can be verified on a clean cluster.
+      # ======================================================================
+      - name: Teardown Phase 1 bundles + namespaces
+        run: |
+          for r in home-cloud-base home-cloud-auth home-cloud-storage \
+                   home-cloud-secrets home-cloud-serverless home-cloud-registry \
+                   home-cloud-observability home-cloud-security; do
+            helm uninstall "$r" >/dev/null 2>&1 || true
+          done
+          for ns in apps auth storage secrets serverless registry monitoring; do
+            kubectl delete namespace "$ns" --ignore-not-found=true --wait=true >/dev/null 2>&1 || true
+          done
+          kubectl get namespaces
+
+      # ======================================================================
+      # PHASE 3 — the home-cloud aggregator chart: enable a chosen set via
+      # values, prove enabled bundles are present and a disabled one is absent.
+      # ======================================================================
+      - name: Install aggregator (home-cloud chart) with a controlled bundle set
+        run: |
+          # enabled: base, auth, storage, registry, security  (tls disabled: no DNS/LE in CI)
+          # disabled: secrets, serverless, observability
+          helm upgrade --install home-cloud bundles/home-cloud \
+            --set base.enabled=true --set base.domain=mycloud.com --set base.mode=cloudflare --set base.tls.enabled=false \
+            --set auth.enabled=true --set auth.domain=mycloud.com --set auth.tls.enabled=false \
+            --set storage.enabled=true --set storage.domain=mycloud.com --set storage.tls.enabled=false \
+            --set registry.enabled=true --set registry.domain=mycloud.com --set registry.tls.enabled=false \
+            --set security.enabled=true --set security.namespaces="{apps,auth,storage,registry}" \
+            --set secrets.enabled=false --set serverless.enabled=false --set observability.enabled=false
+
+      - name: Wait for aggregator hello rollout + pods
+        run: |
+          kubectl -n apps rollout status deployment/hello --timeout=240s
+          sleep 10
+          kubectl get pods -A
+
+      - name: Write Aggregator (Phase 3) assertions
+        run: |
+          cat > "$RUNNER_TEMP/e2e-phase3.sh" <<'PH3EOF'
+          #!/usr/bin/env bash
+          set -uo pipefail
+          R="${RUNNER_TEMP:-.}"
+          RESULTS="$R/e2e-phase3.txt"; : > "$RESULTS"
+          BODY=""
+          PASS=0; TOTAL=0; FAILURES=0
+          e(){ echo "$1" >> "$RESULTS"; echo "$1"; }
+          run_check(){
+            local name="$1"; shift; TOTAL=$((TOTAL+1))
+            if ( "$@" ) >"$R/chk.out" 2>&1; then
+              PASS=$((PASS+1)); e "✔ $name"
+              BODY+="    <testcase classname=\"phase3\" name=\"$name\"/>\n"
+            else
+              FAILURES=$((FAILURES+1)); e "✘ $name"
+              BODY+="    <testcase classname=\"phase3\" name=\"$name\"><failure/></testcase>\n"
+              sed 's/^/    | /' "$R/chk.out" >&2
+            fi
+          }
+          # (f) aggregator enables exactly the requested bundles
+          assert_enabled_present(){
+            # base re-applied via aggregator: hello must serve again
+            kubectl -n apps get deployment hello >/dev/null 2>&1 || { echo "hello missing (base not enabled)"; return 1; }
+            local code
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 http://hello.mycloud.com/ || true)
+            [[ "$code" == "200" ]] || { echo "hello HTTP $code via aggregator"; return 1; }
+            # enabled namespaces
+            for ns in apps auth storage registry; do
+              kubectl get namespace "$ns" >/dev/null 2>&1 || { echo "enabled ns missing: $ns"; return 1; }
+            done
+            # auth middleware present when auth enabled
+            kubectl -n apps get middleware protected-gate >/dev/null 2>&1 || { echo "auth protected-gate missing"; return 1; }
+            # storage + registry routes present when enabled
+            kubectl -n storage get ingressroute minio-api >/dev/null 2>&1 || { echo "storage minio-api route missing"; return 1; }
+            kubectl -n registry get ingressroute harbor  >/dev/null 2>&1 || { echo "registry harbor route missing"; return 1; }
+            # security netpols only on the enabled namespaces we configured
+            for ns in apps auth storage registry; do
+              kubectl -n "$ns" get networkpolicy default-deny-ingress >/dev/null 2>&1 || { echo "netpol missing in $ns"; return 1; }
+            done
+            echo "enabled set present: base+auth+storage+registry+security"
+          }
+          assert_disabled_absent(){
+            local rc=0
+            for ns in secrets serverless monitoring; do
+              kubectl get namespace "$ns" >/dev/null 2>&1 && { echo "disabled bundle namespace EXISTS: $ns"; rc=1; }
+            done
+            kubectl get ingressroute -A --no-headers 2>/dev/null | grep -qw vault && { echo "vault route exists despite secrets disabled"; rc=1; }
+            kubectl get ingressroute -A --no-headers 2>/dev/null | grep -qw faas-gateway && { echo "faas route exists despite serverless disabled"; rc=1; }
+            [[ $rc -eq 0 ]] || return 1
+            echo "disabled bundles absent: secrets, serverless, observability"
+          }
+          run_check "F1 aggregator enables exactly the requested set" assert_enabled_present
+          run_check "F2 a disabled bundle is absent"                 assert_disabled_absent
+          e ""
+          e "PHASE 3 aggregator: $PASS/$TOTAL passed, $FAILURES failed"
+          {
+            printf '<?xml version="1.0" encoding="UTF-8"?>\n'
+            printf '<testsuites name="home-cloud-e2e-phase3" tests="%d" failures="%d">\n' "$TOTAL" "$FAILURES"
+            printf '  <testsuite name="aggregator" tests="%d" failures="%d">\n' "$TOTAL" "$FAILURES"
+            printf '%b' "$BODY"
+            printf '  </testsuite>\n</testsuites>\n'
+          } > "$R/JUnit-phase3.xml"
+          if [[ "$FAILURES" -gt 0 ]]; then echo "✘ E2E PHASE 3 FAILED" >&2; exit 1; else echo "✔ E2E PHASE 3 GREEN"; fi
+          PH3EOF
+          chmod +x "$RUNNER_TEMP/e2e-phase3.sh"
+
+      - name: Run Aggregator (Phase 3) assertions
+        run: |
+          bash "$RUNNER_TEMP/e2e-phase3.sh"
+          { echo; echo "## Phase 3 — aggregator assertions (f)"; echo; echo '```'; cat "$RUNNER_TEMP/e2e-phase3.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # ======================================================================
+      # Report — archive JUnit-style results so the repo history shows "green".
+      # ======================================================================
+      - name: Archive E2E results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-junit
+          path: |
+            ${{ runner.temp }}/JUnit-phase1.xml
+            ${{ runner.temp }}/JUnit-phase3.xml
+            ${{ runner.temp }}/e2e-phase1.txt
+            ${{ runner.temp }}/e2e-phase3.txt
+          if-no-files-found: warn
+
+      - name: E2E summary
+        if: always()
+        run: |
+          { echo "## ☁️ home-cloud E2E result"; echo; \
+            echo "Phases: **Phase 1** (step-by-step bundle boot + cross-stack A–E) and **Phase 3** (aggregator enabled/disabled, check F)."; \
+            echo; echo "See the `e2e-junit` artifact and the logs above for granular assertions."; } >> "$GITHUB_STEP_SUMMARY"

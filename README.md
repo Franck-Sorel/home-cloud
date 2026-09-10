@@ -57,11 +57,15 @@ home-cloud/
 │   ├── 05-observability/          ← Logging, metrics, alerting (Loki, Prometheus, Grafana)
 │   ├── 06-testing/                ← Verify it works & expose a service to the world
 │   ├── 07-iac-gitops/             ← Infrastructure-as-Code & GitOps (Terraform, ArgoCD)
-│   └── 08-roadmap/                ← Roadmap, roadmap to AWS-parity, future work
+│   ├── 08-roadmap/                ← Roadmap, roadmap to AWS-parity, future work
+│   └── 09-bundles/                ← Composable bundles, accuracy pipeline, networking models
 ├── bundles/                       ← Composable Helm bundles (choose what to deploy) + home-cloud aggregator
+├── plans/                         ← ⭐ forward-looking plans: E2E validation · virtualization layer
+│   ├── 01-e2e-validation/         ← real-cluster "apply everything" workflow plan (what works / doesn't)
+│   └── 02-virtualization-layer/   ← run the datacenter on LXD / libvirt / Docker (decision)
 ├── justfile                       ← `just validate` / `just deploy <bundle>` / `just package`
 ├── scripts/                       ← Reusable helper scripts (bash)
-├── .github/workflows/             ← CI validation + OCI release
+├── .github/workflows/             ← CI + OCI release + E2E (real-cluster) validation
 ├── deploy/                        ← Kubernetes YAML / Helm values / manifests
 ├── examples/                      ← Sample services and demo applications
 └── LICENSE

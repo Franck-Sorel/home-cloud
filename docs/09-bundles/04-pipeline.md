@@ -2,7 +2,15 @@
 
 Two promises make this repo usable without reading: **accuracy** (CI proves
 every artifact is valid) and **packaging** (each bundle ships as a package you
-choose).
+choose). There are **two CI layers**:
+
+| Workflow | When | Proves |
+|----------|------|--------|
+| `ci.yml` → `just validate` | every push/PR | **static** accuracy: every chart lints/render, scripts shellcheck-clean, terraform valid |
+| `e2e.yml` → boot a real k3s cluster | manual + nightly | **dynamic**: the bundles actually install together and interoperate |
+
+Learn what the real-cluster run proves (and can't) in
+[`plans/01-e2e-validation`](../../plans/01-e2e-validation/README.md).
 
 ---
 

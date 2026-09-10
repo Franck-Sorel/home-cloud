@@ -100,6 +100,15 @@ Next / Back links   ← always at the bottom
 | The architecture drawing | [09-bundles/03-architecture](../09-bundles/03-architecture.md) |
 | The bundle you can `just deploy` | [09-bundles/01-bundles](../09-bundles/01-bundles.md) |
 
+## 🔭 Forward-looking plans (not "docs", but "what's next")
+
+Living **plans**, separate from the numbered docs, for infra/CI folks:
+
+| Plan | What it is |
+|------|-----------|
+| [01-e2e-validation](../../plans/01-e2e-validation/README.md) | A real-cluster "apply everything" workflow — which stacks work together vs not |
+| [02-virtualization-layer](../../plans/02-virtualization-layer/README.md) | Running the datacenter (multi-node k3s) on LXD vs libvirt vs Docker — decision + ops |
+
 ---
 
 ## 🧭 Section navigation
