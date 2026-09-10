@@ -71,8 +71,13 @@ jobs:
           sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
           sudo chown "$(id -u):$(id -g)" ~/.kube/config
           chmod 600 ~/.kube/config
-          kubectl wait --for=condition=Ready node --all --timeout=240s
+          # wait until the k3s node registers, then until it is Ready
+          for i in $(seq 1 60); do
+            if kubectl get node --no-headers 2>/dev/null | grep -q .; then break; fi
+            echo "waiting for k3s node to register... ($i)"; sleep 5
+          done
           kubectl get nodes -o wide
+          kubectl wait --for=condition=Ready node --all --timeout=240s
 
       - name: Install Traefik v3 (our ingress controller)
         run: |
