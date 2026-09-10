@@ -23,5 +23,5 @@ dependencies:
 - name: home-cloud-security
   repository: file://../security
   version: 0.1.0
-digest: sha256:47c31abd9409dc072ac4e615d8739c2bd78b4aba6e7bca2418d58da1b4b812ca
-generated: "2026-09-10T12:25:41.247723792+01:00"
+digest: sha256:e1961d0e2cd8bdb62ead0c5e3532d2cc4c98259b97f7d2d728c8fde32fc1a6b0
+generated: "2026-09-10T16:48:29.306948369+01:00"

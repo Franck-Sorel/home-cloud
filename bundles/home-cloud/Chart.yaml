@@ -6,36 +6,49 @@ description: >
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+# Each dependency declares an `alias` equal to the short bundle name, so the
+# parent's value key (e.g. `auth:`, `security:`) is passed DOWN to that
+# subchart (not just used for the enable/disable `condition`). This lets users
+# override per-bundle values, e.g. `--set security.namespaces={apps,other}`,
+# and lets the e2e control which namespaces get NetworkPolicies.
 dependencies:
   - name: home-cloud-base
+    alias: base
     version: "0.1.0"
     repository: "file://../base"
     condition: base.enabled
   - name: home-cloud-auth
+    alias: auth
     version: "0.1.0"
     repository: "file://../auth"
     condition: auth.enabled
   - name: home-cloud-storage
+    alias: storage
     version: "0.1.0"
     repository: "file://../storage"
     condition: storage.enabled
   - name: home-cloud-secrets
+    alias: secrets
     version: "0.1.0"
     repository: "file://../secrets"
     condition: secrets.enabled
   - name: home-cloud-serverless
+    alias: serverless
     version: "0.1.0"
     repository: "file://../serverless"
     condition: serverless.enabled
   - name: home-cloud-registry
+    alias: registry
     version: "0.1.0"
     repository: "file://../registry"
     condition: registry.enabled
   - name: home-cloud-observability
+    alias: observability
     version: "0.1.0"
     repository: "file://../observability"
     condition: observability.enabled
   - name: home-cloud-security
+    alias: security
     version: "0.1.0"
     repository: "file://../security"
     condition: security.enabled
