@@ -148,7 +148,7 @@ jobs:
           set -euo pipefail
           running=$(kubectl get pods -A --no-headers 2>/dev/null | grep -c Running || true)
           [[ "$running" -ge 3 ]] || { echo "✘ too few Running pods ($running)"; exit 1; }
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://hello.mycloud.com/ || true)
+          code=$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' --max-time 15 http://hello.mycloud.com/ || true)
           if [[ "$code" != "200" ]]; then
             echo "✘ hello HTTP $code (expected 200)"
             echo "--- diagnostics ---"
@@ -201,7 +201,7 @@ jobs:
           }
           assert_hello_traefik(){
             local code
-            code=$(curl -s -o "$R/hello-body.html" -w '%{http_code}' --max-time 20 http://hello.mycloud.com/ || true)
+            code=$(curl --noproxy '*' -s -o "$R/hello-body.html" -w '%{http_code}' --max-time 20 http://hello.mycloud.com/ || true)
             [[ "$code" == "200" ]] || { echo "hello HTTP $code (expected 200)"; return 1; }
             grep -q "Welcome to home-cloud" "$R/hello-body.html" || { echo "hello body missing expected text"; return 1; }
             echo "hello HTTP 200 through Traefik IngressRoute (cluster-local)"
@@ -218,7 +218,7 @@ jobs:
           }
           assert_security_headers(){
             local hdrs
-            hdrs=$(curl -sI --max-time 20 http://hello.mycloud.com/ || true)
+            hdrs=$(curl --noproxy '*' -sI --max-time 20 http://hello.mycloud.com/ || true)
             grep -qi 'X-Content-Type-Options: *nosniff' <<<"$hdrs" \
               || { echo "missing header X-Content-Type-Options: nosniff"; return 1; }
             grep -qi 'X-Frame-Options: *SAMEORIGIN' <<<"$hdrs" \
@@ -338,7 +338,7 @@ jobs:
             # base re-applied via aggregator: hello must serve again
             kubectl -n apps get deployment hello >/dev/null 2>&1 || { echo "hello missing (base not enabled)"; return 1; }
             local code
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 http://hello.mycloud.com/ || true)
+            code=$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' --max-time 20 http://hello.mycloud.com/ || true)
             [[ "$code" == "200" ]] || { echo "hello HTTP $code via aggregator"; return 1; }
             # enabled namespaces
             for ns in apps auth storage registry; do
