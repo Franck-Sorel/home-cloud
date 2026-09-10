@@ -129,8 +129,8 @@ jobs:
           kubectl cluster-info >/dev/null 2>&1
           node=$(kubectl get nodes --no-headers | awk '{print $2}' | head -1)
           [[ "$node" == "Ready" ]] || { echo "✘ L0 node not Ready ($node)"; exit 1; }
-          notrun=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | grep -cv Running || true)
-          [[ "$notrun" -eq 0 ]] || { echo "✘ L1 non-Running kube-system pods: $notrun"; exit 1; }
+          notrun=$(kubectl get pods -n kube-system --no-headers 2>/dev/null | grep -cvE 'Running|Completed' || true)
+          [[ "$notrun" -eq 0 ]] || { echo "✘ L1 non-Running(,non-Completed) kube-system pods: $notrun"; exit 1; }
           routes=$(kubectl get ingressroute -A --no-headers 2>/dev/null | wc -l)
           [[ "$routes" -ge 1 ]] || { echo "✘ L4 no IngressRoutes"; exit 1; }
           down=$(kubectl get pods -A --no-headers 2>/dev/null | grep -cv 'Running\|Completed' || true)
