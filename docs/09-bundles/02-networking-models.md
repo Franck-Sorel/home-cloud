@@ -3,6 +3,17 @@
 The private cloud supports **two** ways to get services on the internet. Pick
 one in `base` (`mode: ddns` or `mode: cloudflare`).
 
+> 🟢 **DNS refresher before you dive in** (full list in the [GLOSSARY](../GLOSSARY.md#1-networking--dns-)):
+> - **FQDN / subdomain / TLD** — your full address (`hello.mycloud.com` = host +
+>   subdomain `hello` + TLD `.com`).
+> - **DDNS** — automatically re-pointing a DNS record to your **public IP** when
+>   broadband changes it (this is what the `ddns-updater` pod does).
+> - **ACME / Let's Encrypt / DNS-01** — the free, automated way to prove you own
+>   a domain (by writing a `TXT` record) and get a **wildcard** cert covering
+>   every `*.mycloud.com` subdomain.
+> - **CGNAT** — when your ISP hides you behind a shared private IP; **DDNS
+>   can't reach you** then, so you need a **tunnel** (Model B).
+
 | | **$0 DDNS** (default) | **Cloudflare Tunnel** (optional) |
 |---|---|---|
 | Cost | **$0** (free DDNS + Let's Encrypt) | **$0** on Cloudflare free tier |

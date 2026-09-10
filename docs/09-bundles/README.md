@@ -5,6 +5,8 @@
 > Helm chart (namespaces, routing, middleware, wiring values) published to an OCI
 > registry, so anyone can `helm install` just what they want.
 
+## 📖 What's in this section
+
 | # | Document | Covers |
 |---|----------|--------|
 | [01](01-bundles.md) | The bundle catalog & how to choose | what each bundle gives you, AWS mapping |

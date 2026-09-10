@@ -11,6 +11,7 @@
 
 | # | Document | Covers |
 |---|----------|--------|
+| 00 | [`00-navigation.md`](00-navigation.md) | **Where to go** — fast paths for beginners & advanced, full map |
 | 01 | [`01-what-is-a-private-cloud.md`](01-what-is-a-private-cloud.md) | The big picture: what we're building and why |
 | 02 | [`02-architecture.md`](02-architecture.md) | The full architecture, layer by layer |
 | 03 | [`03-design-decisions.md`](03-design-decisions.md) | *Why* each technology was chosen (and what was rejected) |

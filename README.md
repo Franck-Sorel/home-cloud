@@ -28,13 +28,28 @@ This is a **complete, end-to-end, self-contained guide** to building your own pr
 
 ---
 
+## 🚦 Start here (before anything else)
+
+Two documents make the journey painless — open them now:
+
+| Doc | What it does |
+|-----|--------------|
+| [📖 **GLOSSARY**](docs/GLOSSARY.md) | Every term (DNS, Kubernetes, Helm, Terraform, GitOps…) defined in plain English. Your translator. |
+| [🧭 **Navigation**](docs/00-understanding/00-navigation.md) | The fast paths: "I want it running" / "I want to understand" / "I want to pick bundles to deploy". |
+
+**Beginner?** → the **Navigation** doc points you straight to `docs/02-setup/`.
+**Advanced?** → the **Navigation** doc points you to `docs/00-understanding/` and `docs/07-iac-gitops/`.
+
+---
+
 ## 🗺️ Repository Map
 
 ```
 home-cloud/
 ├── README.md                      ← You are here. Navigation hub.
 ├── docs/                          ← All documentation (numbered, in order)
-│   ├── 00-understanding/          ← Concept, architecture, decisions, constraints
+│   ├── GLOSSARY.md                ← ⭐ every term, explained in plain English
+│   ├── 00-understanding/          ← Concept, architecture, decisions, constraints + 🧭 navigation
 │   ├── 01-skills/                 ← Knowledge & skills required, AWS→self-hosted map
 │   ├── 02-setup/                  ← Step-by-step installation (from zero to cluster)
 │   ├── 03-services/               ← Deploy the AWS-like services (MinIO, Keycloak...)

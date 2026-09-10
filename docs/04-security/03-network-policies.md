@@ -75,7 +75,7 @@ spec:
 ### C. myapi → Vault, myapi → Postgres, myapi → CoreDNS
 Same pattern; don't forget **CoreDNS** (myapi needs `:53` to resolve names!) and, if your apps are behind the gateway, **Traefik** in `kube-system` again.
 
-> Full manifest set in [`deploy/security/network-policies/`](../../deploy/security/network-policies/).
+> Ready-made default-deny NetworkPolicies ship in the [`security` bundle](../../09-bundles/01-bundles.md) (`bundles/security/templates/default-deny-*.yaml`).
 
 ---
 

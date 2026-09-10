@@ -65,7 +65,7 @@ At minimum, do these four before pointing the world at your cluster:
 
 ## 🔗 Continue reading
 
-► **[Next: 01 — Authentication](/01-authentication.md)**
+► **[Next: 01 — Authentication](01-authentication.md)**
 
 ◄ **[Back to repository home](../../README.md)**
 
