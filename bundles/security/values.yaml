@@ -24,3 +24,7 @@ allowBasic:
 
 # Extra named ports you want opened cluster-wide for testing (e.g. ICMP)
 allowIcmp: false
+
+# The ingress controller (Traefik, in kube-system) must be allowed to reach
+# backends, else default-deny-ingress 502s every route. Defaults on.
+allowTraefikIngress: true
