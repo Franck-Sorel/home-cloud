@@ -70,10 +70,24 @@ jobs:
           kubectl config use-context k3d-e2e
           k3d cluster list
 
-      - name: Wait for control plane + Traefik
+      - name: Wait for control plane + ensure Traefik (IngressRoute CRDs)
         run: |
+          set -euo pipefail
           kubectl wait --for=condition=Ready node --all --timeout=180s
-          kubectl -n kube-system rollout status deployment/traefik --timeout=180s
+          # k3d does NOT ship the k3s-bundled Traefik as deployments/traefik.
+          # Our bundles need Traefik's IngressRoute/Middleware CRDs, so install
+          # the real Traefik chart to make the test deterministic.
+          if kubectl -n kube-system rollout status deployment/traefik --timeout=45s 2>/dev/null; then
+            echo "traefik already running"
+          else
+            echo "traefik not detected — installing traefik/traefik via helm"
+            helm repo add traefik https://traefik.github.io/charts
+            # chart defaults already expose entrypoints web(80)/websecure(443)
+            # via a LoadBalancer service — exactly what k3d's 80->loadbalancer needs
+            helm install traefik traefik/traefik -n kube-system \
+              --create-namespace --skip-crds
+            kubectl -n kube-system rollout status deployment/traefik --timeout=240s
+          fi
           kubectl get nodes -o wide
           kubectl -n kube-system get pods -o wide
 
