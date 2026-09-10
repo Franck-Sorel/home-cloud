@@ -16,7 +16,10 @@ keys.txt
 *.age
 *.id_rsa
 *.json.enc
-secrets/
+# Ignore a plaintext secrets/ folder at the REPO ROOT only — NOT any bundle
+# or deploy subfolder named secrets (bundles/ contains the home-cloud-secrets
+# Helm chart; deploy/secrets holds SOPS-encrypted files that ARE committed).
+/secrets/
 *.creds
 
 # --- Cloudflare ---
