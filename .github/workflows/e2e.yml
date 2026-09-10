@@ -105,9 +105,11 @@ jobs:
       # ======================================================================
       - name: Deploy base first (repo tooling)
         run: |
-          # MODE=cloudflare: web-only ingress, no DDNS CronJob (needs creds),
-          # no tunnel pod (base's cloudflared templates are empty in CI).
-          DOMAIN="$DOMAIN" MODE="$MODE" ./scripts/apply.sh base
+          # MODE=cloudflare + connectors off: renders the base glue only
+          # (namespace, middleware, hello, ingress route). We explicitly turn
+          # OFF the cloudflared edge Deployment because its credentials Secret
+          # cannot exist in CI (no real tunnel); see plans/01-e2e-validation.
+          DOMAIN="$DOMAIN" MODE="$MODE" CONNECTORS=false ./scripts/apply.sh base
 
       - name: Deploy opt-in bundles (auth storage secrets serverless registry observability)
         run: |
@@ -275,7 +277,7 @@ jobs:
           # enabled: base, auth, storage, registry, security  (tls disabled: no DNS/LE in CI)
           # disabled: secrets, serverless, observability
           helm upgrade --install home-cloud bundles/home-cloud \
-            --set base.enabled=true --set base.domain=mycloud.com --set base.mode=cloudflare --set base.tls.enabled=false \
+            --set base.enabled=true --set base.domain=mycloud.com --set base.mode=cloudflare --set base.tls.enabled=false --set base.connectors.enabled=false \
             --set auth.enabled=true --set auth.domain=mycloud.com --set auth.tls.enabled=false \
             --set storage.enabled=true --set storage.domain=mycloud.com --set storage.tls.enabled=false \
             --set registry.enabled=true --set registry.domain=mycloud.com --set registry.tls.enabled=false \

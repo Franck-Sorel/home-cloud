@@ -22,6 +22,8 @@ cd "$ROOT"
 
 DOMAIN="${DOMAIN:-mycloud.com}"
 MODE="${MODE:-ddns}"
+# Optional: pass connector on/off to the base bundle, e.g. CONNECTORS=false
+CONNECTORS="${CONNECTORS:-}"
 
 declare -A CHART=(
   [base]=bundles/base
@@ -50,8 +52,9 @@ for name in "$@"; do
     *)
       [[ -v CHART[$name] ]] || { echo "unknown bundle: $name" >&2; exit 1; }
       echo "→ install bundle: $name (mode=$MODE, domain=$DOMAIN)"
-      helm upgrade --install "home-cloud-$name" "${CHART[$name]}" \
-        --set "domain=$DOMAIN" --set "mode=$MODE"
+      args=(--set "domain=$DOMAIN" --set "mode=$MODE")
+      if [[ -n "$CONNECTORS" ]]; then args+=(--set "connectors.enabled=$CONNECTORS"); fi
+      helm upgrade --install "home-cloud-$name" "${CHART[$name]}" "${args[@]}"
       ;;
   esac
 done

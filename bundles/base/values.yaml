@@ -10,6 +10,14 @@
 #                 (best for CGNAT / hiding your home IP)
 mode: "ddns"
 
+# Whether to deploy the *internet connector* for the chosen mode:
+#   - ddns      → the DDNS updater CronJob (needs ddns-credentials Secret)
+#   - cloudflare→ the cloudflared Deployment  (needs cloudflared-credentials Secret)
+# Set to false when you only want the internal cluster glue (namespaces,
+# middleware, hello, ingress) and haven't created the connector Secret yet.
+connectors:
+  enabled: true
+
 # Your public domain. In "cloudflare" mode this is a zone managed by Cloudflare.
 domain: "mycloud.com"
 
