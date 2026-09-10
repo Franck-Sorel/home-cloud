@@ -68,7 +68,7 @@ jobs:
           # chart we install ourselves below.
           k3d cluster create e2e \
             --image rancher/k3s:v1.36.3-k3s1 \
-            --k3s-arg "--disable=traefik" \
+            --k3s-arg "--disable=traefik@server:0" \
             --port 80:80@loadbalancer \
             --port 443:443@loadbalancer \
             --wait \
