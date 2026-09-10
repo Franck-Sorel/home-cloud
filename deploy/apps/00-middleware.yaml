@@ -3,10 +3,11 @@ kind: Namespace
 metadata:
   name: apps
 ---
+# Traefik v3: one type per Middleware (headers + rateLimit must be split).
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: security-and-limits
+  name: security-headers
   namespace: apps
 spec:
   headers:
@@ -16,6 +17,13 @@ spec:
     referrerPolicy: "strict-origin-when-cross-origin"
     stsSeconds: 31536000
     stsIncludeSubdomains: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-limits
+  namespace: apps
+spec:
   rateLimit:
     average: 50
     burst: 20

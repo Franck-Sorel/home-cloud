@@ -206,13 +206,15 @@ jobs:
             grep -q "Welcome to home-cloud" "$R/hello-body.html" || { echo "hello body missing expected text"; return 1; }
             echo "hello HTTP 200 through Traefik IngressRoute (cluster-local)"
           }
-          # (b) security-and-limits Traefik Middleware attached + SecurityHeaders
+          # (b) security-headers + security-limits Middlewares attached
           assert_middleware_attached(){
-            kubectl -n apps get middleware security-and-limits >/dev/null 2>&1 || { echo "middleware security-and-limits missing"; return 1; }
+            kubectl -n apps get middleware security-headers >/dev/null 2>&1 || { echo "middleware security-headers missing"; return 1; }
+            kubectl -n apps get middleware security-limits  >/dev/null 2>&1 || { echo "middleware security-limits missing"; return 1; }
             local refs
             refs=$(kubectl -n apps get ingressroute hello -o jsonpath='{.spec.routes[0].middlewares[*].name}' 2>/dev/null || true)
-            echo "$refs" | grep -qw security-and-limits || { echo "hello route not attached to security-and-limits (got: $refs)"; return 1; }
-            echo "security-and-limits present + attached on hello route"
+            echo "$refs" | grep -qw security-headers || { echo "hello route not attached to security-headers (got: $refs)"; return 1; }
+            echo "$refs" | grep -qw security-limits  || { echo "hello route not attached to security-limits (got: $refs)"; return 1; }
+            echo "security-headers + security-limits present and attached on hello route"
           }
           assert_security_headers(){
             local hdrs
@@ -250,7 +252,7 @@ jobs:
           }
           run_check "A1 hello Deployment serving"            assert_hello_deploy
           run_check "A2 hello reachable via Traefik IngressRoute" assert_hello_traefik
-          run_check "B1 security-and-limits middleware attached"  assert_middleware_attached
+          run_check "B1 security-headers+limits middleware attached"  assert_middleware_attached
           run_check "B2 SecurityHeaders applied"                 assert_security_headers
           run_check "C1 auth protected-gate middleware present"  assert_protected_gate
           run_check "D1 enabled-bundle namespaces exist"         assert_namespaces

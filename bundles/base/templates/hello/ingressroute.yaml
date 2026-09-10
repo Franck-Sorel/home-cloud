@@ -16,7 +16,9 @@ spec:
     - match: Host(`{{ include "hc.fqdn" (dict "host" .Values.demoApp.host "domain" .Values.domain) }}`)
       kind: Rule
       middlewares:
-        - name: security-and-limits
+        - name: security-headers
+          namespace: apps
+        - name: security-limits
           namespace: apps
       services:
         - name: hello

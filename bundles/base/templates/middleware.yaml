@@ -1,7 +1,10 @@
+# Traefik v3 note: a Middleware may contain only ONE type. In v2 we combined
+# headers + rateLimit in one object; v3 rejects that ("multi-types middleware
+# not supported"), so we now ship two modern middleware.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: security-and-limits
+  name: security-headers
   namespace: apps
   labels:
     {{- include "hc.labels" . | nindent 4 }}
@@ -13,6 +16,15 @@ spec:
     referrerPolicy: "strict-origin-when-cross-origin"
     stsSeconds: 31536000
     stsIncludeSubdomains: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-limits
+  namespace: apps
+  labels:
+    {{- include "hc.labels" . | nindent 4 }}
+spec:
   rateLimit:
     average: {{ .Values.middleware.rateLimit.average }}
     burst: {{ .Values.middleware.rateLimit.burst }}
