@@ -92,13 +92,17 @@ jobs:
           kubectl -n kube-system get pods -o wide
           kubectl get svc -n kube-system traefik
 
-      # No real public DNS in CI: point our hostnames at the k3s node's
-      # InternalIP, where k3s servicelb exposes the Traefik LoadBalancer.
-      - name: Map bundle hostnames to the cluster node IP
+      # No real public DNS in CI: point our hostnames at the address where
+      # k3s servicelb actually exposes Traefik (the LoadBalancer EXTERNAL-IP).
+      # Fall back to the node InternalIP if the LB IP is not set yet.
+      - name: Map bundle hostnames to Traefik LoadBalancer IP
         run: |
-          NODEIP=$(kubectl get node -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' | tr ' ' '\n' | head -1)
-          echo "node IP: $NODEIP"
-          sudo bash -c "echo '$NODEIP hello.mycloud.com' >> /etc/hosts"
+          LBIP=$(kubectl get svc -n kube-system traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+          if [ -z "$LBIP" ]; then
+            LBIP=$(kubectl get node -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' | tr ' ' '\n' | head -1)
+          fi
+          echo "service LB IP: $LBIP"
+          sudo bash -c "echo '$LBIP hello.mycloud.com' >> /etc/hosts"
           grep hello.mycloud.com /etc/hosts
 
       # ======================================================================
