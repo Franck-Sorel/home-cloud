@@ -80,12 +80,13 @@ jobs:
           if kubectl -n kube-system rollout status deployment/traefik --timeout=45s 2>/dev/null; then
             echo "traefik already running"
           else
-            echo "traefik not detected — installing traefik/traefik via helm"
+            echo "traefik not detected — installing traefik/traefik (v2) via helm"
             helm repo add traefik https://traefik.github.io/charts
-            # chart defaults already expose entrypoints web(80)/websecure(443)
-            # via a LoadBalancer service — exactly what k3d's 80->loadbalancer needs
+            # Pin to the Traefik v2 chart so it reconciles the LEGACY
+            # traefik.containo.us/v1alpha1 IngressRoute/Middleware CRDs this
+            # repo's manifests (and k3s) use. Traefik v3 ignores that group.
             helm install traefik traefik/traefik -n kube-system \
-              --create-namespace --skip-crds
+              --create-namespace --skip-crds --version 25.0.0
             kubectl -n kube-system rollout status deployment/traefik --timeout=240s
           fi
           kubectl get nodes -o wide
