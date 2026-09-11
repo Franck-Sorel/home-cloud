@@ -86,6 +86,22 @@ jobs:
           done
           sudo lxc list --project "$PROJECT"
 
+      - name: "Test container connectivity (DNS + outbound HTTPS)"
+        run: |
+          set -euxo pipefail
+          sudo lxc exec --project "$PROJECT" k3s-server -- bash -c '
+            echo "=== DNS ==="
+            getent hosts get.k3s.io || echo "DNS FAIL"
+            echo "=== default route ==="
+            ip route
+            echo "=== curl get.k3s.io (max 60s) ==="
+            curl -sfL --max-time 60 -o /tmp/k3s-install.sh https://get.k3s.io && wc -c /tmp/k3s-install.sh || echo "CURL FAIL rc=$?"
+            echo "=== curl github.com (max 30s) ==="
+            curl -sI --max-time 30 https://github.com | head -3 || echo "GITHUB FAIL rc=$?"
+            echo "=== curl update.k3s.io (max 30s) ==="
+            curl -sI --max-time 30 https://update.k3s.io | head -3 || echo "UPDATE FAIL rc=$?"
+          '
+
       - name: Install k3s server
         run: |
           set -euxo pipefail
@@ -96,9 +112,12 @@ jobs:
           echo "server ip: $SERVER_IP"
 
           sudo lxc exec --project "$PROJECT" k3s-server -- bash -c "
-            curl -sfL https://get.k3s.io | \
+            set -euxo pipefail
+            # download the installer separately so a silent/empty download is visible
+            curl -sfL --max-time 120 -o /tmp/k3s-install.sh https://get.k3s.io
+            echo 'install script bytes:'; wc -c /tmp/k3s-install.sh
             INSTALL_K3S_EXEC='server --disable=traefik --node-ip=$SERVER_IP --tls-san=$SERVER_IP --tls-san=localhost --flannel-iface=eth0' \
-            K3S_KUBECONFIG_MODE=644 sh -s -
+            K3S_KUBECONFIG_MODE=644 sh /tmp/k3s-install.sh
           "
 
           for i in $(seq 1 60); do
