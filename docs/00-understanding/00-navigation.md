@@ -108,6 +108,7 @@ Living **plans**, separate from the numbered docs, for infra/CI folks:
 |------|-----------|
 | [01-e2e-validation](../../plans/01-e2e-validation/README.md) | A real-cluster "apply everything" workflow — which stacks work together vs not |
 | [02-virtualization-layer](../../plans/02-virtualization-layer/README.md) | Running the datacenter (multi-node k3s) on LXD vs libvirt vs Docker — decision + ops |
+| [03-public-private-split](../../plans/03-public-private-split/README.md) | Keep this "wrap/guidance" repo public; move real workloads + versions to a private repo |
 
 ---
 

@@ -60,9 +60,10 @@ home-cloud/
 │   ├── 08-roadmap/                ← Roadmap, roadmap to AWS-parity, future work
 │   └── 09-bundles/                ← Composable bundles, accuracy pipeline, networking models
 ├── bundles/                       ← Composable Helm bundles (choose what to deploy) + home-cloud aggregator
-├── plans/                         ← ⭐ forward-looking plans: E2E validation · virtualization layer
+├── plans/                         ← ⭐ forward-looking plans: E2E · virtualization · public/private split
 │   ├── 01-e2e-validation/         ← real-cluster "apply everything" workflow plan (what works / doesn't)
-│   └── 02-virtualization-layer/   ← run the datacenter on LXD / libvirt / Docker (decision)
+│   ├── 02-virtualization-layer/   ← run the datacenter on LXD / libvirt / Docker (decision)
+│   └── 03-public-private-split/   ← public "wrap" vs. private "deploy" migration (this → + private repo)
 ├── justfile                       ← `just validate` / `just deploy <bundle>` / `just package`
 ├── scripts/                       ← Reusable helper scripts (bash)
 ├── .github/workflows/             ← CI + OCI release + E2E (real-cluster) validation
