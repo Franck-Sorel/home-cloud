@@ -48,6 +48,9 @@ jobs:
           set -euxo pipefail
           # 2026: default snap track is 5.21/stable; NOT latest/stable (rolling)
           sudo snap install lxd --channel=5.21/stable
+          # Ubuntu 24.04 restricts unprivileged user namespaces by default; LXD
+          # needs them ENABLED at the HOST level or it cannot create containers.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           sudo lxd init --minimal
           sudo lxc version
 
@@ -64,7 +67,7 @@ jobs:
           sudo lxc profile set dc-base --project "$PROJECT" "limits.cpu=1"
           sudo lxc profile set dc-base --project "$PROJECT" "limits.memory=${{ inputs.worker_mem || '1GiB' }}"
           sudo lxc profile set dc-base --project "$PROJECT" "security.nesting=true"
-          sudo lxc profile set dc-base --project "$PROJECT" "linux.sysctl.kernel.apparmor_restrict_unprivileged_userns=0"
+          # (host-level sysctl already enables userns; no in-container sysctl needed)
           sudo lxc profile set dc-base --project "$PROJECT" "linux.kernel_modules=ip_tables,ip6_tables,overlay"
 
       - name: "Launch k3s server + workers (LXD system containers)"
