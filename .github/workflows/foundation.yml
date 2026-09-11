@@ -1,0 +1,148 @@
+name: foundation
+
+# Proves the virtualization (LXD) + k3s foundation works in a CLEAN GitHub
+# runner BEFORE you trust it locally. Replicates the private bring-up at
+# generic (current-stable) versions. Real workloads live in LXD *containers*,
+# never on the host OS — this CI is the proof-of-concept for that layer.
+#
+# Trigger: manual (workflow_dispatch) or nightly. Heavy, so never on PR.
+
+on:
+  workflow_dispatch:
+    inputs:
+      workers:
+        description: "number of k3s workers to launch (CI-sized)"
+        type: number
+        default: 2
+      server_mem:
+        description: "k3s server memory (CI-sized)"
+        default: "2GiB"
+      worker_mem:
+        description: "per-worker memory (CI-sized)"
+        default: "1GiB"
+  schedule:
+    - cron: "0 4 * * *"
+
+concurrency:
+  group: foundation-ci
+  cancel-in-progress: true
+
+jobs:
+  lxd-k3s:
+    name: lxd-foundation
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PROJECT: datacenter
+      NET: datacenter-net
+      POOL: datacenter-pool
+      IMAGE: ubuntu:24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install LXD (default LTS snap) + init
+        run: |
+          set -euxo pipefail
+          # 2026: default snap track is 5.21/stable; NOT latest/stable (rolling)
+          sudo snap install lxd --channel=5.21/stable
+          sudo lxd init --minimal
+          sudo lxc version
+
+      - name: "Create project, network, storage, profiles"
+        run: |
+          set -euxo pipefail
+          Project() { sudo lxc "$@" --project "$PROJECT"; }
+          Project project create "$PROJECT" 2>/dev/null || true
+          sudo lxc network create "$NET" --type bridge --project "$PROJECT" ipv4.address=10.10.0.1/24 ipv4.nat=true ipv6.address=none 2>/dev/null || true
+          sudo lxc storage create "$POOL" dir --project "$PROJECT" 2>/dev/null || true
+          # New project's default profile is EMPTY -> copy the main profile in.
+          sudo lxc profile show default --project default | sudo lxc profile edit default
+          sudo lxc profile create dc-base --project "$PROJECT" 2>/dev/null || true
+          sudo lxc profile set dc-base --project "$PROJECT" "limits.cpu=1"
+          sudo lxc profile set dc-base --project "$PROJECT" "limits.memory=${{ inputs.worker_mem || '1GiB' }}"
+          sudo lxc profile set dc-base --project "$PROJECT" "security.nesting=true"
+          sudo lxc profile set dc-base --project "$PROJECT" "linux.sysctl.kernel.apparmor_restrict_unprivileged_userns=0"
+          sudo lxc profile set dc-base --project "$PROJECT" "linux.kernel_modules=ip_tables,ip6_tables,overlay"
+
+      - name: "Launch k3s server + workers (LXD system containers)"
+        run: |
+          set -euxo pipefail
+          W=${{ inputs.workers || 2 }}
+          sudo lxc launch "$IMAGE" k3s-server --project "$PROJECT" --profile dc-base \
+            --config "limits.cpu=2" --config "limits.memory=${{ inputs.server_mem || '2GiB' }}" \
+            --device "root,size=20GiB" --storage "$POOL" --network "$NET"
+          i=1
+          while [ "$i" -le "$W" ]; do
+            sudo lxc launch "$IMAGE" "k3s-worker$i" --project "$PROJECT" --profile dc-base \
+              --config "limits.cpu=1" --config "limits.memory=${{ inputs.worker_mem || '1GiB' }}" \
+              --device "root,size=15GiB" --storage "$POOL" --network "$NET"
+            i=$((i+1))
+          done
+          sudo lxc list --project "$PROJECT"
+
+      - name: Install k3s server
+        run: |
+          set -euxo pipefail
+          SERVER_IP=$(sudo lxc list --project "$PROJECT" --format csv -c 4,n | awk -F, '/k3s-server/{print $1; exit}')
+          echo "SERVER_IP=$SERVER_IP" >> "$GITHUB_ENV"
+          echo "server ip: $SERVER_IP"
+          sudo lxc exec k3s-server --project "$PROJECT" -- bash -c "
+            curl -sfL https://get.k3s.io | \
+              INSTALL_K3S_EXEC='server --disable=traefik --node-ip=$SERVER_IP --tls-san=$SERVER_IP --tls-san=localhost --flannel-iface=eth0' \
+              K3S_KUBECONFIG_MODE=644 sh -s -
+          "
+          for i in $(seq 1 60); do
+            if sudo lxc exec k3s-server --project "$PROJECT" -- bash -c 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml; kubectl get node k3s-server 2>/dev/null | grep -q Ready'; then
+              echo "server Ready"; break; fi
+            echo "waiting server... ($i)"; sleep 5
+          done
+          sudo lxc exec k3s-server --project "$PROJECT" -- bash -c 'cat /var/lib/rancher/k3s/server/node-token' | tr -d '\n' > /tmp/token
+          echo "::add-mask::$(cat /tmp/token)"
+          echo "K3S_TOKEN=$(cat /tmp/token)" >> "$GITHUB_ENV"
+
+      - name: Join workers
+        run: |
+          set -euxo pipefail
+          W=${{ inputs.workers || 2 }}
+          i=1
+          while [ "$i" -le "$W" ]; do
+            WIP=$(sudo lxc list --project "$PROJECT" --format csv -c 4,n | awk -F, "/k3s-worker$i/{print \$1; exit}")
+            echo "joining k3s-worker$i at $WIP"
+            sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
+              curl -sfL https://get.k3s.io | \
+                K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
+                INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
+            "
+            i=$((i+1))
+          done
+
+      - name: Verify cluster (all nodes Ready)
+        run: |
+          set -euxo pipefail
+          W=${{ inputs.workers || 2 }}
+          sudo lxc file pull k3s-server/etc/rancher/k3s/k3s.yaml --project "$PROJECT" k3s.yaml
+          sed -i "s/127.0.0.1/${SERVER_IP}/" k3s.yaml
+          export KUBECONFIG=$PWD/k3s.yaml
+          kubectl cluster-info
+          for i in $(seq 1 60); do
+            N=$(kubectl get nodes --no-headers 2>/dev/null | grep -c Ready || true)
+            echo "ready=$N/$((1+W)) (iter $i)"; [ "$N" -ge "$((1+W))" ] && break; sleep 5
+          done
+          kubectl get nodes -o wide
+          kubectl get pods -A -o wide
+          [ "$(kubectl get nodes --no-headers | grep -c Ready)" -ge "$((1+W))" ]
+
+      - name: "Toggle + snapshot sanity"
+        run: |
+          set -euxo pipefail
+          sudo lxc snapshot k3s-server snap-ci --project "$PROJECT"
+          sudo lxc restore k3s-server snap-ci --project "$PROJECT"
+          sudo lxc stop --all --project "$PROJECT"
+          sudo lxc start k3s-server --project "$PROJECT"
+          sleep 15
+          export KUBECONFIG=$PWD/k3s.yaml
+          kubectl get nodes -o wide || true
+          echo "FOUNDATION GREEN ✅"
