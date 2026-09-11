@@ -1,0 +1,246 @@
+name: agent-fix
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Self-healing CI: whenever one of the watched workflows FAILS on main, this
+# workflow wakes up, runs the opencode agent (big-pickle) in PARALLEL analysis
+# tasks, then ALWAYS opens a PR with the fix, and verifies the PR by re-running
+# the failing workflow on the PR branch (up to 3 iterations).
+#
+#   watched workflows (by `name:`): validate (ci.yml), e2e, foundation, release
+#
+# Required repo secrets (the agent needs a model API key on the runner):
+#   OPENCODE_API_KEY   (or ANTHROPIC_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY)
+#   OPENCODE_BASE_URL  (only if your model is behind a custom gateway)
+#
+# Loop safety:
+#   - only reacts to failures on `main` (head_branch == 'main')
+#   - never watches itself (agent-fix is not in the watched list)
+#   - pushes made with GITHUB_TOKEN do NOT re-trigger workflows
+#   - re-dispatched verification runs land on the PR branch, so their
+#     completion does not re-trigger this workflow (head_branch != main)
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_run:
+    workflows: ["validate", "e2e", "foundation", "release"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: agent-fix
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+  OPENCODE_BASE_URL: ${{ secrets.OPENCODE_BASE_URL }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+jobs:
+  # ── PARALLEL analysis tasks ────────────────────────────────────────────────
+  # Two opencode agents run at the same time, each looking at the failure from
+  # a different angle. Both must finish before the fix job starts.
+  analyze:
+    name: analyze (${{ matrix.focus }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        focus: [logs, repo]
+    if: |
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'failure' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install opencode
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "opencode installed at /home/runner/.opencode/bin/opencode"
+          /home/runner/.opencode/bin/opencode --version
+
+      - name: Check model auth is configured
+        run: |
+          if [ -z "${OPENCODE_API_KEY:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ] && \
+             [ -z "${OPENAI_API_KEY:-}" ] && [ -z "${OPENROUTER_API_KEY:-}" ]; then
+            echo "::error::No model API key found. Add a repo secret (OPENCODE_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY or OPENROUTER_API_KEY) so opencode can reach the model."
+            exit 1
+          fi
+          echo "model auth present"
+
+      - name: Collect failing run context
+        run: |
+          set -euxo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            WF_NAME="${{ github.event.workflow_run.name }}"
+          else
+            # manual dispatch: pick the most recent failed run of a watched workflow
+            RUN_ID=""
+            for wf in foundation e2e release validate; do
+              file="$wf.yml"; [ "$wf" = "validate" ] && file="ci.yml"
+              ID=$(gh run list --workflow "$file" --limit 5 --json databaseId,conclusion \
+                --jq '[.[] | select(.conclusion=="failure")][0].databaseId' 2>/dev/null || true)
+              if [ -n "$ID" ]; then RUN_ID="$ID"; WF_NAME="$wf"; break; fi
+            done
+            [ -n "$RUN_ID" ] || { echo "no failed runs found"; exit 0; }
+          fi
+          {
+            echo "RUN_ID=$RUN_ID"
+            echo "WF_NAME=$WF_NAME"
+          } >> "$GITHUB_ENV"
+          gh run view "$RUN_ID" --log > /tmp/failed-run.log 2>&1 || true
+          gh run view "$RUN_ID" --json jobs,headBranch,event,conclusion,displayTitle > /tmp/failed-run.json || true
+          echo "context: $WF_NAME run $RUN_ID ($(wc -l < /tmp/failed-run.log) log lines)"
+
+      - name: "opencode: analyze (${{ matrix.focus }})"
+        run: |
+          /home/runner/.opencode/bin/opencode run \
+            --thinking \
+            --auto \
+            --model opencode/big-pickle \
+            "You are a CI failure analyst for this repository. GitHub Actions workflow '$WF_NAME' (run $RUN_ID) FAILED on main. Logs: /tmp/failed-run.log, summary: /tmp/failed-run.json. Your focus: ${{ matrix.focus }}. Write a concise root-cause analysis (evidence + reasoning) to /tmp/findings-${{ matrix.focus }}.md. Do not modify any files."
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: findings-${{ matrix.focus }}
+          path: /tmp/findings-${{ matrix.focus }}.md
+          if-no-files-found: error
+
+  # ── Fix + ALWAYS create a PR after all parallel tasks ─────────────────────
+  fix-and-pr:
+    name: fix + PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: analyze
+    if: always() && needs.analyze.result == 'success'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install opencode
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "opencode installed at /home/runner/.opencode/bin/opencode"
+          /home/runner/.opencode/bin/opencode --version
+
+      - uses: actions/download-artifact@v7
+        with:
+          path: /tmp/findings
+
+      - name: Resolve failing run context
+        run: |
+          set -euxo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            WF_NAME="${{ github.event.workflow_run.name }}"
+          else
+            RUN_ID=""
+            for wf in foundation e2e release validate; do
+              file="$wf.yml"; [ "$wf" = "validate" ] && file="ci.yml"
+              ID=$(gh run list --workflow "$file" --limit 5 --json databaseId,conclusion \
+                --jq '[.[] | select(.conclusion=="failure")][0].databaseId' 2>/dev/null || true)
+              if [ -n "$ID" ]; then RUN_ID="$ID"; WF_NAME="$wf"; break; fi
+            done
+            [ -n "$RUN_ID" ] || { echo "no failed runs found"; exit 0; }
+          fi
+          {
+            echo "RUN_ID=$RUN_ID"
+            echo "WF_NAME=$WF_NAME"
+            echo "BRANCH=fix/$WF_NAME-$RUN_ID"
+          } >> "$GITHUB_ENV"
+
+      - name: "opencode: brainstorm, plan, implement, validate"
+        run: |
+          /home/runner/.opencode/bin/opencode run \
+            --thinking \
+            --auto \
+            --model opencode/big-pickle \
+            "Read /tmp/findings/findings-logs/findings-logs.md and /tmp/findings/findings-repo/findings-repo.md. Brainstorm, plan, then IMPLEMENT the fix for the failed workflow '$WF_NAME' (run $RUN_ID) in this repository. Validate locally: actionlint, yamllint, bash -n, helm lint. Do NOT commit or push — leave changes in the working tree. Report what you changed and how you validated it."
+
+      - name: Create PR (always, after all parallel tasks)
+        run: |
+          set -euxo pipefail
+          git checkout -b "$BRANCH"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no changes to commit — nothing to fix?"
+            exit 0
+          fi
+          git -c user.name="opencode-agent" -c user.email="agent@users.noreply.github.com" \
+            commit -m "fix($WF_NAME): address failed run $RUN_ID"
+          git push -u origin "$BRANCH"
+          BODY=$(cat <<EOF
+          Automated fix by the **agent-fix** workflow for failed run [$RUN_ID](https://github.com/${{ github.repository }}/actions/runs/$RUN_ID).
+
+          Findings:
+          - logs angle: /tmp/findings/findings-logs/findings-logs.md
+          - repo angle: /tmp/findings/findings-repo/findings-repo.md
+
+          Verification: re-running $WF_NAME on this branch.
+          EOF
+          )
+          gh pr create --base main --head "$BRANCH" \
+            --title "fix($WF_NAME): address failed run $RUN_ID" \
+            --body "$BODY" || true
+
+      - name: Verify the PR works (re-run failing workflow on PR branch)
+        run: |
+          set -euxo pipefail
+          case "$WF_NAME" in
+            validate) WF_FILE=ci.yml ;;
+            *)        WF_FILE="$WF_NAME.yml" ;;
+          esac
+          if ! grep -q "workflow_dispatch" ".github/workflows/$WF_FILE"; then
+            echo "::notice::$WF_FILE has no workflow_dispatch — verification = local validation already done in the fix step"
+            exit 0
+          fi
+          for attempt in 1 2 3; do
+            echo "=== verification attempt $attempt: re-running $WF_FILE on $BRANCH ==="
+            gh workflow run "$WF_FILE" --ref "$BRANCH" || true
+            RUN2=""
+            for i in $(seq 1 12); do
+              RUN2=$(gh run list --workflow "$WF_FILE" --branch "$BRANCH" --limit 1 \
+                --json databaseId,status --jq '.[0] | select(.status != "completed") | .databaseId' 2>/dev/null || true)
+              [ -n "$RUN2" ] && break
+              sleep 10
+            done
+            [ -n "$RUN2" ] || { echo "no new run appeared for $BRANCH"; continue; }
+            for i in $(seq 1 60); do
+              STATE=$(gh run view "$RUN2" --json status,conclusion --jq '.status + "/" + (.conclusion // "none")' 2>/dev/null || true)
+              echo "run $RUN2: $STATE (iter $i)"
+              case "$STATE" in
+                completed/success) echo "PR VERIFIED GREEN ✅"; exit 0 ;;
+                completed/*) break ;;
+              esac
+              sleep 15
+            done
+            # still failing: let the agent iterate on the PR branch
+            gh run view "$RUN2" --log > /tmp/verify-failed.log 2>&1 || true
+            /home/runner/.opencode/bin/opencode run \
+              --thinking \
+              --auto \
+              --model opencode/big-pickle \
+              "Verification re-run $RUN2 of '$WF_FILE' on branch '$BRANCH' failed again (attempt $attempt). Logs: /tmp/verify-failed.log. Fix the remaining issues in the working tree. Validate locally. Do NOT commit."
+            git add -A
+            git -c user.name="opencode-agent" -c user.email="agent@users.noreply.github.com" \
+              commit -m "fix($WF_NAME): iteration $attempt for run $RUN2" || true
+            git push origin "$BRANCH" || true
+          done
+          echo "::error::verification still failing after 3 attempts — see PR on branch $BRANCH"
+          exit 1
