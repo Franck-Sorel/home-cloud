@@ -69,9 +69,11 @@ jobs:
           sudo lxc profile set dc-base --project "$PROJECT" "security.nesting=true"
           # (host-level sysctl already enables userns; no in-container sysctl needed)
           sudo lxc profile set dc-base --project "$PROJECT" "linux.kernel_modules=ip_tables,ip6_tables,overlay"
-          # LXD bridge DNS returns AAAA-only for some domains; the container
-          # has no IPv6 routing → curl hangs on IPv6 connections. Force IPv4.
-          sudo lxc profile set dc-base --project "$PROJECT" "linux.sysctl.net.ipv6.conf.all.disable_ipv6=1"
+          # NOTE: linux.sysctl.* at profile level fails ("Failed to set LXC config")
+          # for both apparmor_restrict_unprivileged_userns and ipv6.disable_ipv6.
+          # IPv6 is disabled INSIDE each container at runtime instead (see install
+          # and join steps) because the LXD bridge DNS returns AAAA-only records
+          # and containers have no IPv6 routing → curl hangs on IPv6 connections.
 
       - name: "Launch k3s server + workers (LXD system containers)"
         run: |
