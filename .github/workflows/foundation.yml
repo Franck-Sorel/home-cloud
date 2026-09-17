@@ -69,6 +69,9 @@ jobs:
           sudo lxc profile set dc-base --project "$PROJECT" "security.nesting=true"
           # (host-level sysctl already enables userns; no in-container sysctl needed)
           sudo lxc profile set dc-base --project "$PROJECT" "linux.kernel_modules=ip_tables,ip6_tables,overlay"
+          # LXD bridge DNS returns AAAA-only for some domains; the container
+          # has no IPv6 routing → curl hangs on IPv6 connections. Force IPv4.
+          sudo lxc profile set dc-base --project "$PROJECT" "linux.sysctl.net.ipv6.conf.all.disable_ipv6=1"
 
       - name: "Launch k3s server + workers (LXD system containers)"
         run: |
@@ -94,12 +97,14 @@ jobs:
             getent hosts get.k3s.io || echo "DNS FAIL"
             echo "=== default route ==="
             ip route
-            echo "=== curl get.k3s.io (max 60s) ==="
-            curl -sfL --max-time 60 -o /tmp/k3s-install.sh https://get.k3s.io && wc -c /tmp/k3s-install.sh || echo "CURL FAIL rc=$?"
-            echo "=== curl github.com (max 30s) ==="
-            curl -sI --max-time 30 https://github.com | head -3 || echo "GITHUB FAIL rc=$?"
-            echo "=== curl update.k3s.io (max 30s) ==="
-            curl -sI --max-time 30 https://update.k3s.io | head -3 || echo "UPDATE FAIL rc=$?"
+            echo "=== IPv6 status ==="
+            sysctl net.ipv6.conf.all.disable_ipv6 || true
+            echo "=== curl get.k3s.io (IPv4, max 60s) ==="
+            curl -4 -sfL --max-time 60 -o /tmp/k3s-install.sh https://get.k3s.io && wc -c /tmp/k3s-install.sh || echo "CURL FAIL rc=$?"
+            echo "=== curl github.com (IPv4, max 30s) ==="
+            curl -4 -sI --max-time 30 https://github.com | head -3 || echo "GITHUB FAIL rc=$?"
+            echo "=== curl update.k3s.io (IPv4, max 30s) ==="
+            curl -4 -sI --max-time 30 https://update.k3s.io | head -3 || echo "UPDATE FAIL rc=$?"
           '
 
       - name: Install k3s server
@@ -113,8 +118,11 @@ jobs:
 
           sudo lxc exec --project "$PROJECT" k3s-server -- bash -c "
             set -euxo pipefail
+            # belt-and-suspenders: disable IPv6 inside the container too (profile
+            # sysctl may not apply if LXD version lacks support)
+            sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
             # download the installer separately so a silent/empty download is visible
-            curl -sfL --max-time 120 -o /tmp/k3s-install.sh https://get.k3s.io
+            curl -4 -sfL --max-time 120 -o /tmp/k3s-install.sh https://get.k3s.io
             echo 'install script bytes:'; wc -c /tmp/k3s-install.sh
             INSTALL_K3S_EXEC='server --disable=traefik --node-ip=$SERVER_IP --tls-san=$SERVER_IP --tls-san=localhost --flannel-iface=eth0' \
             K3S_KUBECONFIG_MODE=644 sh /tmp/k3s-install.sh
@@ -161,7 +169,8 @@ jobs:
             WIP=$(sudo lxc list --project "$PROJECT" --format csv -c 4,n | awk -F, "/k3s-worker$i/{print \$1; exit}" | sed 's/ .*//')
             echo "joining k3s-worker$i at $WIP"
             sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
-              curl -sfL https://get.k3s.io | \
+              sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
+              curl -4 -sfL https://get.k3s.io | \
                 K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
                 INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
             "

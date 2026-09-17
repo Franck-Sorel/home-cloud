@@ -40,7 +40,7 @@ private-home-cloud/
 ├── .sops.yaml                 # age public key + creation rules
 ├── lxd/                       # virtualization foundation (corrected bring-up)
 │   ├── bring-up.sh            # snap 5.21/stable, lxd init, project, profiles, launch
-│   ├── profiles/{dc-base,server,worker,dns}.yml
+│   ├── profiles/dc-base.yml       # one base profile; per-node CPU/MEM/disk set at launch
 │   ├── teardown.sh            # stop/start/snapshot/restore helpers
 │   └── README.md              # full, corrected commands + verification
 ├── k3s/
