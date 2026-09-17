@@ -30,7 +30,12 @@ workload.
   - **Copy the default project's profile in** (new project default profile is empty → else `No root device`):
     `lxc profile show default --project default | lxc profile edit default`
   - Create `dc-base` profile: `limits.cpu=2`, `limits.memory=4GiB`, `security.nesting=true`,
-    `linux.sysctl.kernel.apparmor_restrict_unprivileged_userns=0`.
+    `linux.kernel_modules=ip_tables,ip6_tables,overlay`.
+  - **Do NOT add `linux.sysctl.*` keys to the profile** — LXD rejects them (`Failed to set
+    LXC config`) for both `apparmor_restrict_unprivileged_userns` and `disable_ipv6`. Enable
+    userns at the **host** level (`kernel.apparmor_restrict_unprivileged_userns=0`), and do
+    the ipv6 disable **inside** each container at runtime (`sysctl -w
+    net.ipv6.conf.all.disable_ipv6=1`) plus `curl -4` on every in-container download.
   - Launch (correct flags). **All `lxc launch` commands run on the HOST.** Replace
     `${SERVER_RAM}` below with the concrete number (see Sizing): 8GiB on a ≥32GiB host,
     else 6GiB.
@@ -53,6 +58,12 @@ workload.
 - Docs: `lxd/README.md` + `k3s/*.sh` fully written and verified on the real machine.
 
 **Gates (M0)**
+- **How "foundation green" is demonstrated:** the LXD→k3s bring-up is proven via the
+  **local runbook** ([05 — Local verification](05-local-verification-runbook.md)), **not CI**.
+  On a GitHub runner the LXD bridge has no egress (the runner host doesn't forward/NAT the
+  bridge), so the in-container `curl https://get.k3s.io` times out (`exit 28`). CI stays a
+  **best-effort smoke** until a NAT-ing runner is available; the local run is the source of
+  truth for the k3s/project/launch/join/verify steps.
 - `kubectl get nodes` → **3 Ready** (`k3s-server`, `k3s-worker1`, `k3s-worker2`).
 - Toggle works: `lxc stop --all --project datacenter` frees RAM; `lxc start --all --project datacenter` brings all 3 back Ready with state intact.
 - Snapshot + restore works: `lxc snapshot k3s-server snap-001` then `lxc restore k3s-server snap-001`.
