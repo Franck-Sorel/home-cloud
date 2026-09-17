@@ -1,9 +1,16 @@
 name: foundation
 
-# Proves the virtualization (LXD) + k3s foundation works in a CLEAN GitHub
-# runner BEFORE you trust it locally. Replicates the private bring-up at
-# generic (current-stable) versions. Real workloads live in LXD *containers*,
-# never on the host OS — this CI is the proof-of-concept for that layer.
+# Proves the virtualization (LXD) + k3s foundation. The k3s/project/profile/
+# launch/join/verify steps in this file are the SOURCE OF TRUTH and are verified
+# manually on the datacenter host via:
+#   plans/03-public-private-split/05-local-verification-runbook.md
+#   plans/03-public-private-split/verify-local.sh
+#
+# CAVEAT: this workflow is verified LOCALLY, not reliably in CI. On a GitHub
+# runner the LXD bridge has no egress (host firewall doesn't forward/NAT the
+# bridge), so the very first `curl https://get.k3s.io` inside a container times
+# out even though the same steps pass on the host. Treat CI as a best-effort
+# smoke, not the green gate, until a NAT-ing runner is available.
 #
 # Trigger: manual (workflow_dispatch) or nightly. Heavy, so never on PR.
 
@@ -94,19 +101,27 @@ jobs:
       - name: "Test container connectivity (DNS + outbound HTTPS)"
         run: |
           set -euxo pipefail
+          echo "=== HOST: default route ==="
+          ip route
+          echo "=== HOST: iptables NAT rules for 10.10.0.0/24 ==="
+          sudo iptables -t nat -L -n | grep -E '10\.10\.0|MASQUERADE' || echo "NO NAT RULES"
+          echo "=== HOST: FORWARD policy ==="
+          sudo iptables -L FORWARD -n | head -10
           sudo lxc exec --project "$PROJECT" k3s-server -- bash -c '
-            echo "=== DNS ==="
-            getent hosts get.k3s.io || echo "DNS FAIL"
-            echo "=== default route ==="
-            ip route
-            echo "=== IPv6 status ==="
+            echo "=== CONTAINER: IPv6 status ==="
             sysctl net.ipv6.conf.all.disable_ipv6 || true
-            echo "=== curl get.k3s.io (IPv4, max 60s) ==="
+            echo "=== CONTAINER: default route ==="
+            ip route
+            echo "=== CONTAINER: ping 8.8.8.8 (ICMP via NAT) ==="
+            ping -4 -c 2 -W 3 8.8.8.8 || echo "PING FAIL"
+            echo "=== CONTAINER: reach host bridge gw 10.10.0.1:53 ==="
+            timeout 3 bash -c "echo > /dev/tcp/10.10.0.1/53" && echo "host:53 reachable" || echo "host:53 FAIL"
+            echo "=== CONTAINER: curl http://example.com (port 80) ==="
+            curl -4 -v --max-time 10 http://example.com -o /dev/null 2>&1 | tail -4 || echo "HTTP FAIL"
+            echo "=== CONTAINER: curl https://1.1.1.1 (IP, no DNS) ==="
+            curl -4 -v --max-time 10 https://1.1.1.1 -o /dev/null 2>&1 | tail -4 || echo "HTTPS-IP FAIL"
+            echo "=== CONTAINER: curl get.k3s.io (IPv4, max 60s) ==="
             curl -4 -sfL --max-time 60 -o /tmp/k3s-install.sh https://get.k3s.io && wc -c /tmp/k3s-install.sh || echo "CURL FAIL rc=$?"
-            echo "=== curl github.com (IPv4, max 30s) ==="
-            curl -4 -sI --max-time 30 https://github.com | head -3 || echo "GITHUB FAIL rc=$?"
-            echo "=== curl update.k3s.io (IPv4, max 30s) ==="
-            curl -4 -sI --max-time 30 https://update.k3s.io | head -3 || echo "UPDATE FAIL rc=$?"
           '
 
       - name: Install k3s server
