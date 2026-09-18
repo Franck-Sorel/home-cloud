@@ -216,6 +216,10 @@ for i in $(seq 1 60); do
   fi
   echo "waiting server... ($i)"; sleep 5
 done
+# FAIL LOUDLY if the server never became Ready — otherwise the agent join hangs
+# forever (k3s service is Type=notify with TimeoutStartSec=0).
+sudo lxc exec --project "$PROJECT" k3s-server -- bash -c 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml; kubectl get node k3s-server 2>/dev/null | grep -q Ready' \
+  || { echo "k3s server never became Ready — see Diagnose"; exit 1; }
 
 sudo lxc exec --project "$PROJECT" k3s-server -- bash -c 'cat /var/lib/rancher/k3s/server/node-token' | tr -d '\n' > /tmp/token
 echo "K3S_TOKEN=$(cat /tmp/token)"
@@ -231,22 +235,34 @@ still points at host egress, NOT at k3s.
 
 ---
 
-## 6. Join workers (workflow: "Join workers")
+## 6. Join workers (workflow: "Join workers (parallel)")
+
+Workers are independent → join them in **parallel** (bash background jobs; LXD
+state must persist in a single job, so no cross-job matrix). Each join is wrapped
+in `timeout` because k3s's `systemctl start` blocks forever (`Type=notify`,
+`TimeoutStartSec=0`) if the agent can't reach the server — a timeout turns a
+silent hang into a loud failure.
 
 ```bash
 W=2
-i=1
-while [ "$i" -le "$W" ]; do
-  WIP=$(sudo lxc list --project "$PROJECT" --format csv -c 4,n | awk -F, "/k3s-worker$i/{print \$1; exit}" | sed 's/ .*//')
-  echo "joining k3s-worker$i at $WIP"
-  sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
-    sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
-    curl -4 -sfL https://get.k3s.io | \
-      K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
-      INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
-  "
-  i=$((i+1))
+pids=()
+for i in $(seq 1 "$W"); do
+  (
+    set -euo pipefail
+    WIP=$(sudo lxc list --project "$PROJECT" --format csv -c 4,n | awk -F, "/k3s-worker$i/{print \$1; exit}" | sed 's/ .*//')
+    echo "joining k3s-worker$i at $WIP"
+    timeout 300 sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
+      sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
+      curl -4 -sfL https://get.k3s.io | \
+        K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
+        INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
+    "
+  ) &
+  pids+=("$!")
 done
+FAIL=0
+for p in "${pids[@]}"; do wait "$p" || FAIL=1; done
+[ "$FAIL" = "0" ] || { echo "one or more workers failed to join"; exit 1; }
 ```
 
 ---

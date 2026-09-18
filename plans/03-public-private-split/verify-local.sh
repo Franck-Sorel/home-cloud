@@ -96,23 +96,32 @@ for i in $(seq 1 60); do
   fi
   echo "waiting server... ($i)"; sleep 5
 done
+# fail loudly if the server never became Ready (else the agent join hangs forever)
+sudo lxc exec --project "$PROJECT" k3s-server -- bash -c 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml; kubectl get node k3s-server 2>/dev/null | grep -q Ready' \
+  || { echo "k3s server never became Ready"; exit 1; }
 
 K3S_TOKEN=$(sudo lxc exec --project "$PROJECT" k3s-server -- bash -c 'cat /var/lib/rancher/k3s/server/node-token' | tr -d '\n')
 echo "token acquired"
 
-echo "=== [6] Join workers ==="
-i=1
-while [ "$i" -le "$W" ]; do
-  WIP=$(sudo lxc list --project "$PROJECT" --format csv -c 4,n | awk -F, "/k3s-worker$i/{print \$1; exit}" | sed 's/ .*//')
-  echo "joining k3s-worker$i at $WIP"
-  sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
-    sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
-    curl -4 -sfL https://get.k3s.io | \
-      K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
-      INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
-  "
-  i=$((i+1))
+echo "=== [6] Join workers (parallel, with timeout) ==="
+pids=()
+for i in $(seq 1 "$W"); do
+  (
+    set -euo pipefail
+    WIP=$(sudo lxc list --project "$PROJECT" --format csv -c 4,n | awk -F, "/k3s-worker$i/{print \$1; exit}" | sed 's/ .*//')
+    echo "joining k3s-worker$i at $WIP"
+    timeout 300 sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
+      sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
+      curl -4 -sfL https://get.k3s.io | \
+        K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
+        INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
+    "
+  ) &
+  pids+=("$!")
 done
+FAIL=0
+for p in "${pids[@]}"; do wait "$p" || FAIL=1; done
+[ "$FAIL" = "0" ] || { echo "one or more workers failed to join"; exit 1; }
 
 echo "=== [7] Verify cluster (all nodes Ready) ==="
 sudo lxc file pull k3s-server/etc/rancher/k3s/k3s.yaml --project "$PROJECT" k3s.yaml

@@ -47,6 +47,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
@@ -152,14 +157,20 @@ jobs:
             K3S_KUBECONFIG_MODE=644 sh /tmp/k3s-install.sh
           "
 
+          # Fail loudly if the server never becomes Ready — otherwise the step
+          # "succeeds" while the server is unreachable and the agent join hangs
+          # forever (k3s service is Type=notify with TimeoutStartSec=0).
+          READY=0
           for i in $(seq 1 60); do
             if sudo lxc exec --project "$PROJECT" k3s-server -- bash -c 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml; kubectl get node k3s-server 2>/dev/null | grep -q Ready'; then
               echo "server Ready"
+              READY=1
               break
             fi
             echo "waiting server... ($i)"
             sleep 5
           done
+          [ "$READY" = "1" ] || { echo "::error::k3s server never became Ready — see Diagnose step"; exit 1; }
 
           sudo lxc exec --project "$PROJECT" k3s-server -- bash -c 'cat /var/lib/rancher/k3s/server/node-token' | tr -d '\n' > /tmp/token
           echo "::add-mask::$(cat /tmp/token)"
@@ -184,22 +195,33 @@ jobs:
           echo "=== container info ==="
           sudo lxc info k3s-server --project "$PROJECT" || true
 
-      - name: Join workers
+      - name: Join workers (parallel)
         run: |
           set -euxo pipefail
           W=${{ inputs.workers || 2 }}
-          i=1
-          while [ "$i" -le "$W" ]; do
-            WIP=$(sudo lxc list --project "$PROJECT" --format csv -c 4,n | awk -F, "/k3s-worker$i/{print \$1; exit}" | sed 's/ .*//')
-            echo "joining k3s-worker$i at $WIP"
-            sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
-              sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
-              curl -4 -sfL https://get.k3s.io | \
-                K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
-                INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
-            "
-            i=$((i+1))
+          # Workers are independent → join them in parallel (bash background jobs;
+          # LXD state must persist in this single job, so no cross-job matrix).
+          # Each join is wrapped in `timeout` because k3s's systemctl start blocks
+          # forever (Type=notify, TimeoutStartSec=0) if the agent can't reach the
+          # server — a timeout turns a silent hang into a loud failure.
+          pids=()
+          for i in $(seq 1 "$W"); do
+            (
+              set -euo pipefail
+              WIP=$(sudo lxc list --project "$PROJECT" --format csv -c 4,n | awk -F, "/k3s-worker$i/{print \$1; exit}" | sed 's/ .*//')
+              echo "joining k3s-worker$i at $WIP"
+              timeout 300 sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
+                sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
+                curl -4 -sfL https://get.k3s.io | \
+                  K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
+                  INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
+              "
+            ) &
+            pids+=("$!")
           done
+          FAIL=0
+          for p in "${pids[@]}"; do wait "$p" || FAIL=1; done
+          [ "$FAIL" = "0" ] || { echo "::error::one or more workers failed to join"; exit 1; }
 
       - name: Verify cluster (all nodes Ready)
         run: |
