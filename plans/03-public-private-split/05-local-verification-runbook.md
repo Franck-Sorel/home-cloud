@@ -152,6 +152,19 @@ sudo lxc list --project "$PROJECT"
 This is the step that fails in CI. **Locally it must ALL pass.** It isolates
 whether the host forwards/NATs the bridge.
 
+> **CI-only prerequisite (Docker's FORWARD policy).** GitHub runners run Docker,
+> which sets the kernel `FORWARD` policy to `DROP` and only allows its own bridge
+> (`172.17.0.0/16`). LXD container egress is *forwarded* traffic, so it gets
+> dropped → in-container `curl` times out. The workflow opens the LXD bridge
+> explicitly (right after creating the network, before k3s install):
+> ```bash
+> sudo iptables -I FORWARD -i "$NET" -j ACCEPT
+> sudo iptables -I FORWARD -o "$NET" -j ACCEPT
+> ```
+> **Never restart Docker** — it rewrites these rules on start. We only insert our
+> own rules on top. On a clean local host (no Docker) this is unnecessary; the
+> probe below confirms egress either way.
+
 ```bash
 echo "=== HOST: default route ==="; ip route
 echo "=== HOST: NAT rules for 10.10.0.0/24 ==="

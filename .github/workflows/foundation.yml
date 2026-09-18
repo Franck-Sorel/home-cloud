@@ -67,6 +67,13 @@ jobs:
           Project() { sudo lxc "$@" --project "$PROJECT"; }
           Project project create "$PROJECT" 2>/dev/null || true
           sudo lxc network create "$NET" --type bridge --project "$PROJECT" ipv4.address=10.10.0.1/24 ipv4.nat=true ipv6.address=none 2>/dev/null || true
+          # GitHub runners run Docker, which sets the kernel FORWARD policy to DROP
+          # and only allows its own bridge (172.17.0.0/16). LXD container egress is
+          # FORWARDED traffic, so it gets dropped → in-container curl times out.
+          # Open the LXD bridge explicitly. NEVER restart Docker (it rewrites these
+          # rules on start); we only insert our own rules on top.
+          sudo iptables -I FORWARD -i "$NET" -j ACCEPT
+          sudo iptables -I FORWARD -o "$NET" -j ACCEPT
           sudo lxc storage create "$POOL" dir --project "$PROJECT" 2>/dev/null || true
           # New project's default profile is EMPTY -> copy the main profile in.
           sudo lxc profile show default --project default | sudo lxc profile edit default
