@@ -166,8 +166,9 @@ jobs:
           # Fail loudly if the server never becomes Ready — otherwise the step
           # "succeeds" while the server is unreachable and the agent join hangs
           # forever (k3s service is Type=notify with TimeoutStartSec=0).
+          # First startup can take ~6 min (image pulls + etcd init), so poll 10 min.
           READY=0
-          for i in $(seq 1 60); do
+          for i in $(seq 1 120); do
             if sudo lxc exec --project "$PROJECT" k3s-server -- bash -c 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml; kubectl get node k3s-server 2>/dev/null | grep -q Ready'; then
               echo "server Ready"
               READY=1

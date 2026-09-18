@@ -215,7 +215,7 @@ sudo lxc exec --project "$PROJECT" k3s-server -- bash -c "
   K3S_KUBECONFIG_MODE=644 sh /tmp/k3s-install.sh
 "
 
-for i in $(seq 1 60); do
+for i in $(seq 1 120); do
   if sudo lxc exec --project "$PROJECT" k3s-server -- bash -c 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml; kubectl get node k3s-server 2>/dev/null | grep -q Ready'; then
     echo "server Ready"; break
   fi
