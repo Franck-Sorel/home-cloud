@@ -47,13 +47,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Node 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
       - name: Install kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@v5
 
       - name: Install LXD (default LTS snap) + init
         run: |
@@ -160,9 +155,10 @@ jobs:
             # belt-and-suspenders: disable IPv6 inside the container too (profile
             # sysctl may not apply if LXD version lacks support)
             sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
-            # kubelet needs /dev/kmsg; create it in-container (profile device may
-            # not apply on all hosts). c 1 11 = the kmsg char device.
-            mknod /dev/kmsg c 1 11 2>/dev/null || true
+            # kubelet needs /dev/kmsg; a real device node (mknod c 1 11) trips the
+            # runner's device-cgroup ("operation not permitted"). Symlink to
+            # /dev/null instead — kubelet can open it and reads EOF.
+            ln -sf /dev/null /dev/kmsg 2>/dev/null || true
             # download the installer separately so a silent/empty download is visible
             curl -4 -sfL --max-time 120 -o /tmp/k3s-install.sh https://get.k3s.io
             echo 'install script bytes:'; wc -c /tmp/k3s-install.sh
@@ -226,7 +222,7 @@ jobs:
               echo "joining k3s-worker$i at $WIP"
               timeout 300 sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
                 sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
-                mknod /dev/kmsg c 1 11 2>/dev/null || true
+                ln -sf /dev/null /dev/kmsg 2>/dev/null || true
                 curl -4 -sfL https://get.k3s.io | \
                   K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
                   INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -

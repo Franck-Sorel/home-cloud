@@ -39,24 +39,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Node 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
+      # Tool installs are independent → run them in parallel (native `parallel`
+      # keyword: each runs as a background step with an implicit wait at the end).
+      - parallel:
+          - name: Install Just
+            uses: taiki-e/install-action@v2
+            with:
+              tool: just
 
-      # --- Same tooling as ci.yml: just + helm, plus kubectl for assertions ---
-      - name: Install Just
-        uses: taiki-e/install-action@v2
-        with:
-          tool: just
+          - name: Install Helm
+            uses: azure/setup-helm@v5
+            with:
+              version: "v3.15.4"
 
-      - name: Install Helm
-        uses: azure/setup-helm@v5
-        with:
-          version: "v3.15.4"
-
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v5
+          - name: Install kubectl
+            uses: azure/setup-kubectl@v5
 
       # --- Boot a real k3s cluster using the documented get.k3s.io install ---
       - name: Install k3s (bare)
