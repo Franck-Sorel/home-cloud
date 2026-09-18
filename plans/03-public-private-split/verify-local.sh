@@ -79,6 +79,7 @@ echo "server ip: $SERVER_IP"
 if ! sudo lxc exec --project "$PROJECT" k3s-server -- bash -c "
     set -euxo pipefail
     sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
+    mknod /dev/kmsg c 1 11 2>/dev/null || true
     curl -4 -sfL --max-time 120 -o /tmp/k3s-install.sh https://get.k3s.io
     echo 'install script bytes:'; wc -c /tmp/k3s-install.sh
     INSTALL_K3S_EXEC='server --disable=traefik --node-ip=$SERVER_IP --tls-san=$SERVER_IP --tls-san=localhost --flannel-iface=eth0' \
@@ -114,6 +115,7 @@ for i in $(seq 1 "$W"); do
     echo "joining k3s-worker$i at $WIP"
     timeout 300 sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
       sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
+      mknod /dev/kmsg c 1 11 2>/dev/null || true
       curl -4 -sfL https://get.k3s.io | \
         K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
         INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
