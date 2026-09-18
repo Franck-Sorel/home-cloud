@@ -32,6 +32,7 @@ sudo lxc profile create dc-base --project "$PROJECT" 2>/dev/null || true
 sudo lxc profile set dc-base --project "$PROJECT" "limits.cpu=1"
 sudo lxc profile set dc-base --project "$PROJECT" "limits.memory=1GiB"
 sudo lxc profile set dc-base --project "$PROJECT" "security.nesting=true"
+sudo lxc profile set dc-base --project "$PROJECT" "security.privileged=true"
 sudo lxc profile set dc-base --project "$PROJECT" "linux.kernel_modules=ip_tables,ip6_tables,overlay"
 
 echo "=== [3] Launch k3s server + workers ==="
