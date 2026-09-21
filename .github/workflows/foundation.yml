@@ -50,6 +50,26 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v5
 
+      # Article Part 1 Step 2: remove Docker entirely. On a fresh ubuntu-latest
+      # runner Docker is preinstalled; it sets FORWARD policy to DROP, only NATs
+      # its own 172.17.0.0/16, and can push LXD onto the legacy xtables backend.
+      # Removing it (like the article does on the host) removes all of that.
+      # Each job is a fresh VM, so pruning Docker here is safe and isolated.
+      - name: "Remove Docker (article Part 1 Step 2 — FORWARD + firewall backend)"
+        run: |
+          set -euxo pipefail
+          sudo systemctl stop docker docker.socket 2>/dev/null || true
+          sudo apt-get -y purge 'docker*' containerd runc 2>/dev/null || true
+          sudo apt-get -y autoremove 2>/dev/null || true
+          sudo snap remove docker 2>/dev/null || true
+          # clear Docker's leftover iptables/nftables rules so LXD picks nftables
+          sudo iptables -F 2>/dev/null || true
+          sudo iptables -t nat -F 2>/dev/null || true
+          sudo iptables -X 2>/dev/null || true
+          sudo nft flush ruleset 2>/dev/null || true
+          command -v docker && echo "!! docker still present" || echo "docker removed"
+          sudo nft list ruleset || echo "nftables empty (clean state)"
+
       - name: Install LXD (default LTS snap) + init
         run: |
           set -euxo pipefail
@@ -87,12 +107,20 @@ jobs:
           # (article Part 2 "the privileged profile"). Lab-only, not a security
           # boundary.
           sudo lxc profile set dc-base --project "$PROJECT" "security.privileged=true"
+          # Article Part 2 Step 4 full profile:
+          # - raw.lxc unconfined AppArmor: the kubelet's /dev/kmsg open was
+          #   "operation not permitted" because LXD's AppArmor profile blocks it
+          #   even when privileged. unconfined removes that → kubelet can open it.
+          # - lxc.mount.auto=proc:rw sys:rw: kube-proxy writes to these.
+          sudo lxc profile set dc-base --project "$PROJECT" "raw.lxc" \
+            $'lxc.apparmor.profile=unconfined\nlxc.mount.auto=proc:rw sys:rw'
           # kubelet needs /dev/kmsg (kernel message device), absent in an
           # unprivileged LXD container → kubelet crashes → server crash-loops.
           # Pass the host's /dev/kmsg through (article Part 2 device passthrough).
           sudo lxc profile device add dc-base kmsg unix-char source=/dev/kmsg path=/dev/kmsg 2>/dev/null || true
           # (host-level sysctl already enables userns; no in-container sysctl needed)
-          sudo lxc profile set dc-base --project "$PROJECT" "linux.kernel_modules=ip_tables,ip6_tables,overlay"
+          # Backup for the host-side /etc/modules-load.d list. Must match the host.
+          sudo lxc profile set dc-base --project "$PROJECT" "linux.kernel_modules=overlay,nf_conntrack,br_netfilter,iptable_nat,iptable_filter,vxlan"
           # NOTE: linux.sysctl.* at profile level fails ("Failed to set LXC config")
           # for both apparmor_restrict_unprivileged_userns and ipv6.disable_ipv6.
           # IPv6 is disabled INSIDE each container at runtime instead (see install
@@ -155,10 +183,9 @@ jobs:
             # belt-and-suspenders: disable IPv6 inside the container too (profile
             # sysctl may not apply if LXD version lacks support)
             sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
-            # kubelet needs /dev/kmsg; a real device node (mknod c 1 11) trips the
-            # runner's device-cgroup ("operation not permitted"). Symlink to
-            # /dev/null instead — kubelet can open it and reads EOF.
-            ln -sf /dev/null /dev/kmsg 2>/dev/null || true
+            # sanity: kubelet needs /dev/kmsg — it is now passed via the profile
+            # device (plus AppArmor unconfined). Log what's there for diagnosis.
+            ls -l /dev/kmsg || true
             # download the installer separately so a silent/empty download is visible
             curl -4 -sfL --max-time 120 -o /tmp/k3s-install.sh https://get.k3s.io
             echo 'install script bytes:'; wc -c /tmp/k3s-install.sh
@@ -222,7 +249,6 @@ jobs:
               echo "joining k3s-worker$i at $WIP"
               timeout 300 sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
                 sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
-                ln -sf /dev/null /dev/kmsg 2>/dev/null || true
                 curl -4 -sfL https://get.k3s.io | \
                   K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
                   INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
