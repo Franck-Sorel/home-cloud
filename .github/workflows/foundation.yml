@@ -183,9 +183,12 @@ jobs:
             # belt-and-suspenders: disable IPv6 inside the container too (profile
             # sysctl may not apply if LXD version lacks support)
             sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
-            # sanity: kubelet needs /dev/kmsg — it is now passed via the profile
-            # device (plus AppArmor unconfined). Log what's there for diagnosis.
-            ls -l /dev/kmsg || true
+            # kubelet needs /dev/kmsg. The runner's host does NOT expose /dev/kmsg
+            # to LXD (profile unix-char passthrough doesn't materialize → "no such
+            # file"), and mknod trips the device cgroup ("operation not permitted").
+            # A symlink to /dev/null lets the kubelet open it and read EOF — it's
+            # universally accessible.
+            ln -sf /dev/null /dev/kmsg 2>/dev/null || true
             # download the installer separately so a silent/empty download is visible
             curl -4 -sfL --max-time 120 -o /tmp/k3s-install.sh https://get.k3s.io
             echo 'install script bytes:'; wc -c /tmp/k3s-install.sh
@@ -249,6 +252,7 @@ jobs:
               echo "joining k3s-worker$i at $WIP"
               timeout 300 sudo lxc exec "k3s-worker$i" --project "$PROJECT" -- bash -c "
                 sysctl -w net.ipv6.conf.all.disable_ipv6=1 || true
+                ln -sf /dev/null /dev/kmsg 2>/dev/null || true
                 curl -4 -sfL https://get.k3s.io | \
                   K3S_URL='https://${SERVER_IP}:6443' K3S_TOKEN='${K3S_TOKEN}' K3S_NODE_NAME='k3s-worker$i' \
                   INSTALL_K3S_EXEC='--node-ip=$WIP --flannel-iface=eth0' sh -s -
