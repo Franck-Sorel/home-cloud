@@ -195,16 +195,16 @@ jobs:
             curl -4 -sfL --max-time 120 -o /tmp/k3s-install.sh https://get.k3s.io
             INSTALLED=0
             for attempt in 1 2 3 4 5; do
-              echo "install attempt $attempt"
+              echo "install attempt \$attempt"
               if INSTALL_K3S_SKIP_START=true K3S_KUBECONFIG_MODE=644 \
                 INSTALL_K3S_EXEC='server --disable=traefik --node-ip=$SERVER_IP --tls-san=$SERVER_IP --tls-san=localhost --flannel-iface=eth0' \
                 sh /tmp/k3s-install.sh; then
                 INSTALLED=1
                 break
               fi
-              echo "attempt $attempt install failed; retrying in 5s"; sleep 5
+              echo "attempt \$attempt install failed; retrying in 5s"; sleep 5
             done
-            [ "$INSTALLED" = "1" ] || echo "WARN: k3s binary install failed after 5 attempts"
+            [ "\$INSTALLED" = "1" ] || echo "WARN: k3s binary install failed after 5 attempts"
 
             # [verify alt 2] daemon-reload + systemd start
             systemctl daemon-reload 2>/dev/null || true
