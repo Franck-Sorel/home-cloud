@@ -107,13 +107,10 @@ jobs:
           # (article Part 2 "the privileged profile"). Lab-only, not a security
           # boundary.
           sudo lxc profile set dc-base --project "$PROJECT" "security.privileged=true"
-          # Article Part 2 Step 4 full profile:
-          # - raw.lxc unconfined AppArmor: the kubelet's /dev/kmsg open was
-          #   "operation not permitted" because LXD's AppArmor profile blocks it
-          #   even when privileged. unconfined removes that → kubelet can open it.
-          # - lxc.mount.auto=proc:rw sys:rw: kube-proxy writes to these.
-          sudo lxc profile set dc-base --project "$PROJECT" "raw.lxc" \
-            $'lxc.apparmor.profile=unconfined\nlxc.mount.auto=proc:rw sys:rw'
+          # NOTE: we deliberately do NOT set raw.lxc lxc.apparmor.profile=unconfined.
+          # On the hosted runner that breaks systemd inside the container (service
+          # fails to start / unit not found). The kubelet's /dev/kmsg need is met
+          # at runtime via the ln -sf /dev/null symlink in the install/join steps.
           # kubelet needs /dev/kmsg (kernel message device), absent in an
           # unprivileged LXD container → kubelet crashes → server crash-loops.
           # Pass the host's /dev/kmsg through (article Part 2 device passthrough).
