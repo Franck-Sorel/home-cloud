@@ -1,13 +1,11 @@
 # 05 — Local Verification Runbook (LXD + k3s, mirroring the CI workflow)
 
-> **Why this exists.** The `foundation` GitHub Action keeps failing at the very
-> first network call inside the LXD container: `curl` to `get.k3s.io` times out
-> (`exit 28`). Diagnostics show DNS resolves but **no outbound TCP** — the runner
-> host isn't forwarding/NAT-ing the LXD bridge. We can't fix a runner we don't
-> control. So we **prove the steps on the local datacenter host first**, where the
-> host firewall/NAT **should** just work, then promote the verified steps back
-> into the workflow.
->
+> **Why this exists.** The `foundation` GitHub Action proves the LXD+k3s
+> virtualization layer in CI on a hosted runner; this runbook mirrors those exact
+> steps on the datacenter host (where bridge NAT and `/dev/kmsg` behave like a
+> normal machine). For the *why* behind every step — the 6-blocker journey, the
+> false leads, and the full recipe — read the learning guide:
+> [docs/00-understanding/06-running-k3s-in-lxd.md](../../docs/00-understanding/06-running-k3s-in-lxd.md).
 > The commands below are the **exact** ones from `.github/workflows/foundation.yml`
 > (same project, network, storage, profile, launch, k3s install, join, verify),
 > preceded by the host-prep that the LinsNotes guide proves is required. Each

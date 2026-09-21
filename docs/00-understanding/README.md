@@ -17,6 +17,7 @@
 | 03 | [`03-design-decisions.md`](03-design-decisions.md) | *Why* each technology was chosen (and what was rejected) |
 | 04 | [`04-constraints.md`](04-constraints.md) | The hard constraints (e.g. "no touching the OS") and their implications |
 | 05 | [`05-aws-parity.md`](05-aws-parity.md) | Mapping every AWS service to a self-hosted alternative |
+| 06 | [`06-running-k3s-in-lxd.md`](06-running-k3s-in-lxd.md) | **Learning guide** — running k3s inside LXD containers (the 6-blocker journey, false leads, and the full recipe) |
 
 ---
 

@@ -3,6 +3,10 @@
 > **What this is.** The `foundation` workflow proves the LXD+k3s virtualization
 > layer inside a GitHub-hosted `ubuntu-latest` runner. This document is the
 > blocker log and the **winning recipe** that gets it fully green.
+>
+> 🎓 For the full teaching narrative (why each blocker exists, false leads,
+> debugging lessons), see the learning guide:
+> [docs/00-understanding/06-running-k3s-in-lxd.md](../../docs/00-understanding/06-running-k3s-in-lxd.md).
 
 ## Bottom line
 
