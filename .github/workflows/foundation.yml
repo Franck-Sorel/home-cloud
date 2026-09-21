@@ -189,10 +189,11 @@ jobs:
             systemctl is-system-running 2>&1 | head -1 || true
 
             # install k3s binary WITHOUT starting (systemctl may be broken in the
-            # nested user-namespace container)
+            # nested user-namespace container). NOTE: use unescaped $SERVER_IP so
+            # the OUTER shell expands it to the real address.
             curl -4 -sfL --max-time 120 -o /tmp/k3s-install.sh https://get.k3s.io
             INSTALL_K3S_SKIP_START=true K3S_KUBECONFIG_MODE=644 \
-              INSTALL_K3S_EXEC='server --disable=traefik --node-ip=\$SERVER_IP --tls-san=\$SERVER_IP --tls-san=localhost --flannel-iface=eth0' \
+              INSTALL_K3S_EXEC='server --disable=traefik --node-ip=$SERVER_IP --tls-san=$SERVER_IP --tls-san=localhost --flannel-iface=eth0' \
               sh /tmp/k3s-install.sh
 
             # [verify alt 2] daemon-reload + systemd start
@@ -203,12 +204,12 @@ jobs:
             else
               echo '=== systemd path FAILED -> foreground k3s (KubeletInUserNamespace) ==='
               nohup /usr/local/bin/k3s server \
-                --disable=traefik --node-ip=\$SERVER_IP --tls-san=\$SERVER_IP --tls-san=localhost --flannel-iface=eth0 \
+                --disable=traefik --node-ip=$SERVER_IP --tls-san=$SERVER_IP --tls-san=localhost --flannel-iface=eth0 \
                 --kubelet-arg=feature-gates=KubeletInUserNamespace=true \
                 --kube-controller-manager-arg=feature-gates=KubeletInUserNamespace=true \
                 --kube-apiserver-arg=feature-gates=KubeletInUserNamespace=true \
                 >/var/log/k3s.log 2>&1 &
-              echo 'foreground k3s launched (pid \$!)'
+              echo "foreground k3s launched (pid $!)"
             fi
           "
 
