@@ -1,16 +1,21 @@
 name: foundation
 
-# Proves the virtualization (LXD) + k3s foundation. The k3s/project/profile/
-# launch/join/verify steps in this file are the SOURCE OF TRUTH and are verified
-# manually on the datacenter host via:
+# Proves the virtualization (LXD) + k3s foundation END-TO-END on a GitHub-hosted
+# runner: launches LXD containers, boots a k3s server + workers, every node goes
+# Ready, and snapshot/toggle sanity passes. The k3s/profile/launch/join/verify
+# steps are also mirrored for the datacenter host via:
 #   plans/03-public-private-split/05-local-verification-runbook.md
 #   plans/03-public-private-split/verify-local.sh
 #
-# CAVEAT: this workflow is verified LOCALLY, not reliably in CI. On a GitHub
-# runner the LXD bridge has no egress (host firewall doesn't forward/NAT the
-# bridge), so the very first `curl https://get.k3s.io` inside a container times
-# out even though the same steps pass on the host. Treat CI as a best-effort
-# smoke, not the green gate, until a NAT-ing runner is available.
+# To run k3s-in-LXD in CI, the dc-base profile needs the full recipe (see
+# plans/03-public-private-split/06-ci-foundation-findings.md for the blocker log):
+#   - Docker removed (sets FORWARD policy DROP + forces xtables backend)
+#   - security.privileged=true (kubelet loads br_netfilter/overlay)
+#   - security.nesting=true (k3s runs its own containerd)
+#   - lxc.mount.auto=proc:rw sys:rw (kubelet must WRITE /proc/sys)
+#   - runtime `ln -sf /dev/null /dev/kmsg` (runner exposes no /dev/kmsg)
+#   - install via lxc exec --env + quoted heredoc (avoids nested-quote issues)
+#   - 5x retry on the 60MB github.com binary download
 #
 # Trigger: manual (workflow_dispatch) or nightly. Heavy, so never on PR.
 

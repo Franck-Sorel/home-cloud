@@ -32,7 +32,7 @@
 | Version pin removal (M7) breaks public CI | public | Do it LAST; keep CI inputs but mark "CI-only"; run `just validate` + glue e2e before/after |
 | Private heavy services exhaust RAM/disk on your machine | LXD | M0 sizing rule (32GiB for all-four; trim on 16–32); monitor disk-full; not suspend/resume |
 | LXD commands drift from docs | LXD | Use corrected 2026 commands (snap `5.21/stable`, `-c/-d` flags, `--all --project`, copy default profile); shut into private `bring-up.sh` |
-| GitHub runner LXD bridge has no outbound egress | foundation (CI) | Verify k3s/project/launch/join/verify steps **locally** via [runbook 05](05-local-verification-runbook.md); runtime `disable_ipv6` + `curl -4` on every in-container download; strip `(eth0)` iface from `lxc list -c 4` for `SERVER_IP`. CI stays best-effort until a NAT-ing runner is available |
+| GitHub runner k3s-in-LXD quirks (no `/dev/kmsg`, `/proc/sys` read-only, Docker FORWARD-DROP) | foundation (CI) | All resolved via the recipe in [06 — findings](06-ci-foundation-findings.md): remove Docker, `security.privileged`+`nesting`, `raw.lxc` `mount.auto=proc:rw sys:rw`, runtime `/dev/kmsg -> /dev/null` symlink, `lxc exec --env`+heredoc install, binary retry |
 | SOPS/age secret mixup | secrets | Private age key never committed; `.sops.yaml` public key only; CI decrypts with a secret |
 | Traefik/service 404/502 recurs on real cluster | ingress | Already solved in the guides: one-type middleware (`security-headers`+`security-limits`) + `allow-ingress-from-traefik` + our own Traefik v3 (not bundled) |
 | Private charts drift from upstream versions | private | `versions.lock` is the single source; each private PR bumps deliberately |

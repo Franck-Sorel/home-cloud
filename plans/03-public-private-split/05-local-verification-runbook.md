@@ -122,9 +122,14 @@ sudo lxc profile set dc-base --project "$PROJECT" "security.nesting=true"
 # server crash-loops. Privileged is required for k3s-in-LXD (article Part 2
 # "the privileged profile"). Lab-only, not a security boundary.
 sudo lxc profile set dc-base --project "$PROJECT" "security.privileged=true"
+# kubelet must WRITE /proc,/sys (overcommit_memory, kernel.panic, panic_on_oops)
+# to start its ContainerManager; default is read-only → "Failed to start
+# ContainerManager". The article's fix is lxc.mount.auto=proc:rw sys:rw.
+sudo lxc profile set dc-base --project "$PROJECT" "raw.lxc" "lxc.mount.auto=proc:rw sys:rw"
 # kubelet needs /dev/kmsg (kernel message device), absent in an unprivileged
-# LXD container → kubelet crashes → server crash-loops. Pass the host's
-# /dev/kmsg through (article Part 2 device passthrough).
+# LXD container → kubelet crashes → server crash-loops. On a host that exposes
+# /dev/kmsg use the device passthrough below; on a constrained host, symlink
+# /dev/kmsg -> /dev/null at runtime (see §5).
 sudo lxc profile device add dc-base kmsg unix-char source=/dev/kmsg path=/dev/kmsg 2>/dev/null || true
 sudo lxc profile set dc-base --project "$PROJECT" "linux.kernel_modules=ip_tables,ip6_tables,overlay"
 ```

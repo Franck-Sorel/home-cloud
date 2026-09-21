@@ -58,12 +58,11 @@ workload.
 - Docs: `lxd/README.md` + `k3s/*.sh` fully written and verified on the real machine.
 
 **Gates (M0)**
-- **How "foundation green" is demonstrated:** the LXD→k3s bring-up is proven via the
-  **local runbook** ([05 — Local verification](05-local-verification-runbook.md)), **not CI**.
-  On a GitHub runner the LXD bridge has no egress (the runner host doesn't forward/NAT the
-  bridge), so the in-container `curl https://get.k3s.io` times out (`exit 28`). CI stays a
-  **best-effort smoke** until a NAT-ing runner is available; the local run is the source of
-  truth for the k3s/project/launch/join/verify steps.
+- **How "foundation green" is demonstrated:** the LXD→k3s bring-up is proven in CI
+  (the `foundation` workflow passes end-to-end on a GitHub-hosted runner) and
+  mirrored for the datacenter host via the **local runbook**
+  ([05 — Local verification](05-local-verification-runbook.md)). The runner quirks
+  and their fixes are in [06 — findings](06-ci-foundation-findings.md).
 - `kubectl get nodes` → **3 Ready** (`k3s-server`, `k3s-worker1`, `k3s-worker2`).
 - Toggle works: `lxc stop --all --project datacenter` frees RAM; `lxc start --all --project datacenter` brings all 3 back Ready with state intact.
 - Snapshot + restore works: `lxc snapshot k3s-server snap-001` then `lxc restore k3s-server snap-001`.
