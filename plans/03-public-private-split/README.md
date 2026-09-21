@@ -58,6 +58,7 @@ is shared.
 | [03](03-milestones.md) | Milestones | M0–M7 step-by-step with gates + acceptance criteria |
 | [04](04-risks-and-conflicts.md) | Migration safety | how-generic-change-won't-break-existing work, rollback, fine-tuning rules |
 | [05](05-local-verification-runbook.md) | Local verification | step-by-step copy of the `foundation` CI workflow to run on the host, proving the LXD/k3s steps before promoting back to CI |
+| [06](06-ci-foundation-findings.md) | CI blocker log | every hosted-runner restriction blocking k3s-in-LXD in CI (5 blockers), the Docker-removal result, and the remaining alternatives to test |
 
 ---
 
