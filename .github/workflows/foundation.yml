@@ -107,6 +107,12 @@ jobs:
           # (article Part 2 "the privileged profile"). Lab-only, not a security
           # boundary.
           sudo lxc profile set dc-base --project "$PROJECT" "security.privileged=true"
+          # kubelet needs to WRITE /proc/sys (overcommit_memory, kernel.panic,
+          # panic_on_oops) to start its ContainerManager; in an unprivileged LXD
+          # container /proc,/sys are read-only → "Failed to start ContainerManager".
+          # The article's fix is lxc.mount.auto=proc:rw sys:rw. (We intentionally
+          # do NOT add lxc.apparmor.profile=unconfined here.)
+          sudo lxc profile set dc-base --project "$PROJECT" "raw.lxc" "lxc.mount.auto=proc:rw sys:rw"
           # NOTE: we deliberately do NOT set raw.lxc lxc.apparmor.profile=unconfined.
           # On the hosted runner that breaks systemd inside the container (service
           # fails to start / unit not found). The kubelet's /dev/kmsg need is met
